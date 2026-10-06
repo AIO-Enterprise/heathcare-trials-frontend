@@ -1,0 +1,1429 @@
+/**
+ * Shared Layout Components
+ * Owner: Frontend Dev 1
+ *
+ * Reusable layout primitives used by all dashboard modules.
+ * Design tokens and component styles live in index.css — never add
+ * raw Tailwind color/border/bg utilities here for anything brand-related.
+ *
+ * ─── Component Index ─────────────────────────────────────────────────────────
+ *
+ *  <RoleGuardedRoute>     — Wraps any page that requires auth + specific roles.
+ *                           Use in App.jsx around every dashboard route.
+ *
+ *  <AppSidebar>           — Left-hand navigation column. Role-aware nav links.
+ *                           Rendered once inside <PageWithSidebar>.
+ *
+ *  <PageWithSidebar>      — Full-page shell: sidebar + scrollable content area.
+ *                           Wrap each dashboard page's root element with this.
+ *
+ *  <SectionCard>          — White content card with optional title, subtitle,
+ *                           and header action buttons. Use for every content
+ *                           section on a dashboard page (tables, forms, etc.).
+ *
+ *  <CampaignStatusBadge>  — Pill badge showing an advertisement's lifecycle
+ *                           state (draft → published). Drop into any table row
+ *                           or detail view that shows ad status.
+ *
+ *  <MetricSummaryCard>    — Single-metric KPI tile (label + big number + trend).
+ *                           Arrange 3–4 of these in a grid at the top of any
+ *                           analytics or dashboard page.
+ */
+
+import React, { useState, useRef, useEffect } from "react";
+import ReactDOM from "react-dom";
+import { Navigate, useLocation, Link } from "react-router-dom";
+import { useAuth } from "../../contexts/AuthContext";
+import { useGeneration, GEN_STEPS } from "../../contexts/GenerationContext";
+import { authAPI, usersAPI } from "../../services/api";
+import {
+  LayoutDashboard,
+  Users,
+  FileText,
+  BarChart3,
+  LogOut,
+  Shield,
+  Eye,
+  Megaphone,
+  Globe,
+  Bot,
+  Rocket,
+  Share2,
+  Sparkles,
+  X,
+  CheckCircle2,
+  Menu,
+  KeyRound,
+  Mail,
+  Lock,
+  ChevronRight,
+  Loader2,
+  AlertCircle,
+  Pencil,
+  Check,
+} from "lucide-react";
+
+// ─── RoleGuardedRoute ─────────────────────────────────────────────────────────
+// Usage: wrap a page component in App.jsx to restrict access by role.
+//
+//   <RoleGuardedRoute allowedRoles={["study_coordinator"]}>
+//     <AdminDashboard />
+//   </RoleGuardedRoute>
+
+export function RoleGuardedRoute({ children, allowedRoles }) {
+  const { isAuthenticated, role, onboarded, loading } = useAuth();
+  const location = useLocation();
+
+  if (loading)
+    return (
+      <div className="flex items-center justify-center h-screen bg-gray-50">
+        <div className="spinner--dark" />
+      </div>
+    );
+  if (!isAuthenticated) return <Navigate to="/login" state={{ from: location }} />;
+  if (!onboarded) return <Navigate to="/onboarding" />;
+  // The Super User (company owner) can reach every role's pages, so it bypasses
+  // the per-route allowedRoles check — mirrors the backend require_roles bypass.
+  if (allowedRoles && role !== "super_user" && !allowedRoles.includes(role)) {
+    return <Navigate to="/unauthorized" />;
+  }
+  return children;
+}
+
+// Keep legacy alias so existing imports don't break while you migrate.
+export const ProtectedRoute = RoleGuardedRoute;
+
+// ─── Navigation map (role → sidebar links) ───────────────────────────────────
+// Add / remove links here when extending a role's feature set.
+
+const SIDEBAR_LINKS_BY_ROLE = {
+  // Super User (company owner): one unified menu that reaches every role's area.
+  // Each route is normally role-locked, but RoleGuardedRoute lets super_user through.
+  super_user: [
+    { label: "Dashboard", icon: LayoutDashboard, path: "/study-coordinator" },
+    { label: "Create Campaign", icon: Megaphone, path: "/study-coordinator/create" },
+    { label: "Review Queue", icon: Eye, path: "/project-manager" },
+    { label: "Ethics Review", icon: Shield, path: "/ethics" },
+    { label: "Publish & Distribute", icon: Rocket, path: "/publisher" },
+    { label: "Analytics", icon: BarChart3, path: "/study-coordinator/analytics" },
+    { label: "User Management", icon: Users, path: "/study-coordinator/users" },
+    { label: "My Company", icon: FileText, path: "/study-coordinator/company" },
+  ],
+  study_coordinator: [
+    { label: "Dashboard", icon: LayoutDashboard, path: "/study-coordinator" },
+    { label: "Create Campaign", icon: Megaphone, path: "/study-coordinator/create" },
+    { label: "User Management", icon: Users, path: "/study-coordinator/users" },
+    { label: "My Company", icon: FileText, path: "/study-coordinator/company" },
+    { label: "Analytics", icon: BarChart3, path: "/study-coordinator/analytics" },
+  ],
+  project_manager: [
+    { label: "Dashboard", icon: LayoutDashboard, path: "/project-manager" },
+    { label: "Analytics", icon: BarChart3, path: "/project-manager/analytics" },
+  ],
+  ethics_manager: [
+    { label: "Dashboard", icon: LayoutDashboard, path: "/ethics" },
+    { label: "Ethics Review", icon: Shield, path: "/ethics/review" },
+    { label: "Documents", icon: FileText, path: "/ethics/documents" },
+  ],
+  publisher: [
+    { label: "Dashboard", icon: LayoutDashboard, path: "/publisher" },
+    { label: "Publish Website", icon: Rocket, path: "/publisher/deploy" },
+    { label: "Upload Ads", icon: Share2, path: "/publisher/distribute" },
+    { label: "Analytics", icon: BarChart3, path: "/publisher/analytics" },
+  ],
+};
+
+// ─── AppSidebar ───────────────────────────────────────────────────────────────
+// Already included inside <PageWithSidebar> — no need to add manually.
+
+// ─── Profile Modal ────────────────────────────────────────────────────────────
+function ProfileModal({ onClose }) {
+  const { fullName, email, role, updateFullName } = useAuth();
+  // view: "profile" | "sending" | "verify" | "success"
+  const [view, setView] = useState("profile");
+  const [code, setCode] = useState("");
+  const [newPw, setNewPw] = useState("");
+  const [confirmPw, setConfirmPw] = useState("");
+  const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
+  const codeRef = useRef(null);
+
+  // Inline name editing
+  const [editingName, setEditingName] = useState(false);
+  const [nameInput, setNameInput] = useState(fullName || "");
+  const [nameSaving, setNameSaving] = useState(false);
+  const [nameError, setNameError] = useState("");
+  const nameInputRef = useRef(null);
+
+  useEffect(() => {
+    if (editingName) setTimeout(() => nameInputRef.current?.focus(), 30);
+  }, [editingName]);
+
+  const handleSaveName = async () => {
+    const trimmed = nameInput.trim();
+    if (trimmed.length < 2) {
+      setNameError("Name must be at least 2 characters.");
+      return;
+    }
+    setNameSaving(true);
+    setNameError("");
+    try {
+      await usersAPI.updateMe({ full_name: trimmed });
+      updateFullName(trimmed);
+      setEditingName(false);
+    } catch (err) {
+      setNameError(err.message || "Failed to save name.");
+    } finally {
+      setNameSaving(false);
+    }
+  };
+
+  useEffect(() => {
+    if (view === "verify") setTimeout(() => codeRef.current?.focus(), 50);
+  }, [view]);
+
+  const handleSendCode = async () => {
+    setLoading(true);
+    setError("");
+    try {
+      await authAPI.requestPasswordChange();
+      setView("verify");
+    } catch (err) {
+      setError(err.message || "Failed to send code. Try again.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleConfirm = async () => {
+    if (newPw.length < 8) {
+      setError("Password must be at least 8 characters.");
+      return;
+    }
+    if (newPw !== confirmPw) {
+      setError("Passwords don't match.");
+      return;
+    }
+    if (code.length !== 6) {
+      setError("Enter the 6-digit code.");
+      return;
+    }
+    setLoading(true);
+    setError("");
+    try {
+      await authAPI.confirmPasswordChange(code, newPw);
+      setView("success");
+    } catch (err) {
+      setError(err.message || "Invalid or expired code.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const initials = fullName
+    ? fullName
+        .split(" ")
+        .map((w) => w[0])
+        .join("")
+        .slice(0, 2)
+        .toUpperCase()
+    : "U";
+
+  return ReactDOM.createPortal(
+    <>
+      {/* Backdrop — click outside to close */}
+      <div onClick={onClose} style={{ position: "fixed", inset: 0, zIndex: 1000 }} />
+
+      {/* Modal — pops out to the right of the sidebar (w-60 = 240px) */}
+      <div
+        style={{
+          position: "fixed",
+          bottom: 16,
+          left: 256,
+          zIndex: 1001,
+          width: 320,
+          background: "var(--color-card-bg)",
+          border: "1px solid var(--color-card-border)",
+          borderRadius: 14,
+          boxShadow: "0 20px 60px rgba(0,0,0,0.4)",
+          overflow: "hidden",
+          animation: "slideUp 0.18s ease",
+        }}
+      >
+        <style>{`
+          @keyframes slideUp{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
+          @keyframes spin{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}
+        `}</style>
+
+        {/* Header */}
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            padding: "14px 16px 12px",
+            borderBottom: "1px solid var(--color-card-border)",
+          }}
+        >
+          <p
+            style={{
+              margin: 0,
+              fontSize: "0.85rem",
+              fontWeight: 700,
+              color: "var(--color-input-text)",
+            }}
+          >
+            {view === "profile"
+              ? "My Profile"
+              : view === "success"
+                ? "Password Updated"
+                : "Change Password"}
+          </p>
+          <button
+            onClick={onClose}
+            style={{
+              background: "none",
+              border: "none",
+              cursor: "pointer",
+              color: "var(--color-muted)",
+              display: "flex",
+              padding: 2,
+            }}
+          >
+            <X size={15} />
+          </button>
+        </div>
+
+        <div style={{ padding: "16px" }}>
+          {/* ── Profile view ── */}
+          {view === "profile" && (
+            <>
+              {/* Avatar + info */}
+              <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 20 }}>
+                <div
+                  style={{
+                    width: 48,
+                    height: 48,
+                    borderRadius: "50%",
+                    flexShrink: 0,
+                    background:
+                      "rgba(var(--color-accent-r),var(--color-accent-g),var(--color-accent-b),0.15)",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    fontSize: "1rem",
+                    fontWeight: 700,
+                    color: "var(--color-sidebar-text-active)",
+                    border:
+                      "2px solid rgba(var(--color-accent-r),var(--color-accent-g),var(--color-accent-b),0.3)",
+                  }}
+                >
+                  {initials}
+                </div>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  {editingName ? (
+                    <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                      <input
+                        ref={nameInputRef}
+                        value={nameInput}
+                        onChange={(e) => setNameInput(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") handleSaveName();
+                          if (e.key === "Escape") {
+                            setEditingName(false);
+                            setNameInput(fullName || "");
+                            setNameError("");
+                          }
+                        }}
+                        className="field-input"
+                        style={{ fontSize: "0.85rem", padding: "4px 8px", flex: 1, minWidth: 0 }}
+                        maxLength={100}
+                        disabled={nameSaving}
+                      />
+                      <button
+                        onClick={handleSaveName}
+                        disabled={nameSaving}
+                        style={{
+                          background: "none",
+                          border: "none",
+                          cursor: "pointer",
+                          color: "var(--color-sidebar-text-active)",
+                          padding: 2,
+                          display: "flex",
+                          flexShrink: 0,
+                        }}
+                        title="Save"
+                      >
+                        {nameSaving ? (
+                          <Loader2 size={14} style={{ animation: "spin 1s linear infinite" }} />
+                        ) : (
+                          <Check size={14} />
+                        )}
+                      </button>
+                      <button
+                        onClick={() => {
+                          setEditingName(false);
+                          setNameInput(fullName || "");
+                          setNameError("");
+                        }}
+                        style={{
+                          background: "none",
+                          border: "none",
+                          cursor: "pointer",
+                          color: "var(--color-muted)",
+                          padding: 2,
+                          display: "flex",
+                          flexShrink: 0,
+                        }}
+                        title="Cancel"
+                      >
+                        <X size={13} />
+                      </button>
+                    </div>
+                  ) : (
+                    <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                      <p
+                        style={{
+                          margin: 0,
+                          fontSize: "0.9rem",
+                          fontWeight: 700,
+                          color: "var(--color-input-text)",
+                          overflow: "hidden",
+                          textOverflow: "ellipsis",
+                          whiteSpace: "nowrap",
+                        }}
+                      >
+                        {fullName || "User"}
+                      </p>
+                      <button
+                        onClick={() => {
+                          setNameInput(fullName || "");
+                          setEditingName(true);
+                        }}
+                        style={{
+                          background: "none",
+                          border: "none",
+                          cursor: "pointer",
+                          color: "var(--color-muted)",
+                          padding: 2,
+                          display: "flex",
+                          flexShrink: 0,
+                        }}
+                        title="Edit name"
+                      >
+                        <Pencil size={12} />
+                      </button>
+                    </div>
+                  )}
+                  {nameError && (
+                    <p style={{ margin: "3px 0 0", fontSize: "0.7rem", color: "#f87171" }}>
+                      {nameError}
+                    </p>
+                  )}
+                  <p
+                    style={{
+                      margin: "2px 0 0",
+                      fontSize: "0.75rem",
+                      color: "var(--color-muted)",
+                      textTransform: "capitalize",
+                    }}
+                  >
+                    {role?.replace(/_/g, " ")}
+                  </p>
+                </div>
+              </div>
+
+              {/* Email row */}
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 10,
+                  padding: "10px 12px",
+                  borderRadius: 8,
+                  background: "var(--color-page-bg)",
+                  border: "1px solid var(--color-card-border)",
+                  marginBottom: 12,
+                }}
+              >
+                <Mail size={13} style={{ color: "var(--color-muted)", flexShrink: 0 }} />
+                <span
+                  style={{
+                    fontSize: "0.8rem",
+                    color: "var(--color-sidebar-text)",
+                    overflow: "hidden",
+                    textOverflow: "ellipsis",
+                    whiteSpace: "nowrap",
+                  }}
+                >
+                  {email || "—"}
+                </span>
+              </div>
+
+              {/* Change password CTA */}
+              <button
+                onClick={() => setView("sending")}
+                style={{
+                  width: "100%",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  padding: "10px 12px",
+                  borderRadius: 8,
+                  cursor: "pointer",
+                  background:
+                    "rgba(var(--color-accent-r),var(--color-accent-g),var(--color-accent-b),0.08)",
+                  border:
+                    "1px solid rgba(var(--color-accent-r),var(--color-accent-g),var(--color-accent-b),0.2)",
+                  color: "var(--color-sidebar-text-active)",
+                  fontSize: "0.82rem",
+                  fontWeight: 600,
+                  transition: "all 0.15s",
+                }}
+              >
+                <span style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  <KeyRound size={14} /> Change Password
+                </span>
+                <ChevronRight size={14} />
+              </button>
+            </>
+          )}
+
+          {/* ── Sending OTP view ── */}
+          {view === "sending" && (
+            <div style={{ textAlign: "center" }}>
+              <div
+                style={{
+                  width: 48,
+                  height: 48,
+                  borderRadius: "50%",
+                  margin: "0 auto 14px",
+                  background:
+                    "rgba(var(--color-accent-r),var(--color-accent-g),var(--color-accent-b),0.1)",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                }}
+              >
+                <Mail size={20} style={{ color: "var(--color-sidebar-text-active)" }} />
+              </div>
+              <p
+                style={{
+                  margin: "0 0 6px",
+                  fontWeight: 700,
+                  fontSize: "0.88rem",
+                  color: "var(--color-input-text)",
+                }}
+              >
+                Verify via email
+              </p>
+              <p
+                style={{
+                  margin: "0 0 18px",
+                  fontSize: "0.78rem",
+                  color: "var(--color-muted)",
+                  lineHeight: 1.5,
+                }}
+              >
+                We'll send a 6-digit code to
+                <br />
+                <strong style={{ color: "var(--color-sidebar-text)" }}>{email}</strong>
+              </p>
+              {error && (
+                <div
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 6,
+                    padding: "8px 10px",
+                    borderRadius: 7,
+                    marginBottom: 12,
+                    background: "rgba(239,68,68,0.08)",
+                    border: "1px solid rgba(239,68,68,0.2)",
+                  }}
+                >
+                  <AlertCircle size={13} style={{ color: "#f87171", flexShrink: 0 }} />
+                  <p style={{ margin: 0, fontSize: "0.76rem", color: "#f87171" }}>{error}</p>
+                </div>
+              )}
+              <div style={{ display: "flex", gap: 8 }}>
+                <button
+                  onClick={() => {
+                    setView("profile");
+                    setError("");
+                  }}
+                  className="btn--ghost"
+                  style={{ flex: 1, fontSize: "0.8rem" }}
+                >
+                  Back
+                </button>
+                <button
+                  onClick={handleSendCode}
+                  disabled={loading}
+                  className="btn--primary"
+                  style={{
+                    flex: 1,
+                    fontSize: "0.8rem",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    gap: 6,
+                    opacity: loading ? 0.7 : 1,
+                  }}
+                >
+                  {loading ? (
+                    <>
+                      <Loader2 size={13} style={{ animation: "spin 1s linear infinite" }} />{" "}
+                      Sending…
+                    </>
+                  ) : (
+                    "Send Code"
+                  )}
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* ── Verify + new password view ── */}
+          {view === "verify" && (
+            <div>
+              <p
+                style={{
+                  margin: "0 0 14px",
+                  fontSize: "0.8rem",
+                  color: "var(--color-muted)",
+                  lineHeight: 1.5,
+                }}
+              >
+                Code sent to <strong style={{ color: "var(--color-sidebar-text)" }}>{email}</strong>
+                . Enter it below with your new password.
+              </p>
+
+              <label
+                style={{
+                  display: "block",
+                  fontSize: "0.72rem",
+                  fontWeight: 600,
+                  color: "var(--color-sidebar-text)",
+                  marginBottom: 5,
+                }}
+              >
+                Verification Code
+              </label>
+              <input
+                ref={codeRef}
+                value={code}
+                onChange={(e) => setCode(e.target.value.replace(/\D/g, "").slice(0, 6))}
+                placeholder="6-digit code"
+                className="field-input"
+                style={{
+                  letterSpacing: "0.25em",
+                  textAlign: "center",
+                  fontSize: "1.1rem",
+                  marginBottom: 10,
+                }}
+                maxLength={6}
+              />
+
+              <label
+                style={{
+                  display: "block",
+                  fontSize: "0.72rem",
+                  fontWeight: 600,
+                  color: "var(--color-sidebar-text)",
+                  marginBottom: 5,
+                }}
+              >
+                New Password
+              </label>
+              <input
+                type="password"
+                value={newPw}
+                onChange={(e) => setNewPw(e.target.value)}
+                placeholder="Min. 8 characters"
+                className="field-input"
+                style={{ marginBottom: 10 }}
+              />
+
+              <label
+                style={{
+                  display: "block",
+                  fontSize: "0.72rem",
+                  fontWeight: 600,
+                  color: "var(--color-sidebar-text)",
+                  marginBottom: 5,
+                }}
+              >
+                Confirm Password
+              </label>
+              <input
+                type="password"
+                value={confirmPw}
+                onChange={(e) => setConfirmPw(e.target.value)}
+                placeholder="Repeat new password"
+                className="field-input"
+                style={{ marginBottom: 12 }}
+              />
+
+              {error && (
+                <div
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 6,
+                    padding: "8px 10px",
+                    borderRadius: 7,
+                    marginBottom: 12,
+                    background: "rgba(239,68,68,0.08)",
+                    border: "1px solid rgba(239,68,68,0.2)",
+                  }}
+                >
+                  <AlertCircle size={13} style={{ color: "#f87171", flexShrink: 0 }} />
+                  <p style={{ margin: 0, fontSize: "0.76rem", color: "#f87171" }}>{error}</p>
+                </div>
+              )}
+
+              <div style={{ display: "flex", gap: 8 }}>
+                <button
+                  onClick={() => {
+                    setView("sending");
+                    setError("");
+                    setCode("");
+                  }}
+                  className="btn--ghost"
+                  style={{ flex: 1, fontSize: "0.8rem" }}
+                  disabled={loading}
+                >
+                  Resend
+                </button>
+                <button
+                  onClick={handleConfirm}
+                  disabled={loading || code.length < 6 || newPw.length < 8}
+                  className="btn--primary"
+                  style={{
+                    flex: 1,
+                    fontSize: "0.8rem",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    gap: 6,
+                    opacity: loading || code.length < 6 || newPw.length < 8 ? 0.6 : 1,
+                  }}
+                >
+                  {loading ? (
+                    <>
+                      <Loader2 size={13} style={{ animation: "spin 1s linear infinite" }} />{" "}
+                      Updating…
+                    </>
+                  ) : (
+                    <>
+                      <Lock size={13} /> Update
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* ── Success view ── */}
+          {view === "success" && (
+            <div style={{ textAlign: "center", padding: "8px 0 4px" }}>
+              <div
+                style={{
+                  width: 48,
+                  height: 48,
+                  borderRadius: "50%",
+                  margin: "0 auto 14px",
+                  background: "rgba(34,197,94,0.1)",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                }}
+              >
+                <CheckCircle2 size={22} style={{ color: "#22c55e" }} />
+              </div>
+              <p
+                style={{
+                  margin: "0 0 6px",
+                  fontWeight: 700,
+                  fontSize: "0.9rem",
+                  color: "var(--color-input-text)",
+                }}
+              >
+                Password updated!
+              </p>
+              <p style={{ margin: "0 0 18px", fontSize: "0.78rem", color: "var(--color-muted)" }}>
+                Your new password is active.
+              </p>
+              <button
+                onClick={onClose}
+                className="btn--primary"
+                style={{ width: "100%", fontSize: "0.82rem" }}
+              >
+                Done
+              </button>
+            </div>
+          )}
+        </div>
+      </div>
+    </>,
+    document.body,
+  );
+}
+
+export function AppSidebar({ isOpen, onClose }) {
+  const { role, logout, fullName, companyName } = useAuth();
+  const location = useLocation();
+  const navLinks = SIDEBAR_LINKS_BY_ROLE[role] || [];
+  const [profileOpen, setProfileOpen] = useState(false);
+
+  const handleNavClick = () => {
+    if (onClose) onClose();
+  };
+
+  return (
+    <aside className={`sidebar${isOpen ? " sidebar--open" : ""}`}>
+      {/* Brand / logo strip */}
+      <div className="sidebar__brand">
+        <img
+          src="/alt1_trails_logo.svg"
+          alt="ALT Trials"
+          style={{ height: "42px", width: "auto", display: "block" }}
+        />
+        <p className="sidebar__role-label">{role?.replace("_", " ")}</p>
+      </div>
+
+      {/* Role-specific nav links */}
+      <nav className="sidebar__nav">
+        {navLinks.map((link) => {
+          const Icon = link.icon;
+          const isActive = location.pathname === link.path;
+          return (
+            <Link
+              key={link.path}
+              to={link.path}
+              className={isActive ? "sidebar__nav-link--active" : "sidebar__nav-link"}
+              onClick={handleNavClick}
+            >
+              <Icon size={16} />
+              {link.label}
+            </Link>
+          );
+        })}
+      </nav>
+
+      {/* User profile strip — clickable */}
+      <button
+        onClick={() => setProfileOpen(true)}
+        style={{
+          width: "100%",
+          padding: "12px 16px",
+          background: "none",
+          border: "none",
+          borderTop: "1px solid var(--color-sidebar-border)",
+          display: "flex",
+          alignItems: "center",
+          gap: 10,
+          cursor: "pointer",
+          textAlign: "left",
+          transition: "background 0.15s",
+        }}
+        onMouseEnter={(e) => (e.currentTarget.style.background = "rgba(255,255,255,0.05)")}
+        onMouseLeave={(e) => (e.currentTarget.style.background = "none")}
+      >
+        <div
+          style={{
+            width: 30,
+            height: 30,
+            borderRadius: "50%",
+            flexShrink: 0,
+            backgroundColor:
+              "rgba(var(--color-accent-r),var(--color-accent-g),var(--color-accent-b),0.18)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            fontSize: "0.75rem",
+            fontWeight: 700,
+            color: "var(--color-sidebar-text-active)",
+          }}
+        >
+          {fullName ? fullName.charAt(0).toUpperCase() : role?.charAt(0).toUpperCase()}
+        </div>
+        <div style={{ minWidth: 0, flex: 1 }}>
+          <p
+            style={{
+              fontSize: "0.78rem",
+              fontWeight: 600,
+              color: "#e5e7eb",
+              margin: 0,
+              overflow: "hidden",
+              textOverflow: "ellipsis",
+              whiteSpace: "nowrap",
+            }}
+          >
+            {fullName || companyName || "User"}
+          </p>
+          <p
+            style={{
+              fontSize: "0.68rem",
+              color: "var(--color-sidebar-text)",
+              margin: 0,
+              textTransform: "capitalize",
+            }}
+          >
+            {role?.replace(/_/g, " ")}
+          </p>
+        </div>
+        <ChevronRight size={13} style={{ color: "var(--color-muted)", flexShrink: 0 }} />
+      </button>
+
+      {/* Sign-out */}
+      <button onClick={logout} className="sidebar__signout">
+        <LogOut size={15} />
+        Sign Out
+      </button>
+
+      {/* Profile modal */}
+      {profileOpen && <ProfileModal onClose={() => setProfileOpen(false)} />}
+    </aside>
+  );
+}
+
+// Keep legacy alias.
+export const Sidebar = AppSidebar;
+
+// ─── PageWithSidebar ──────────────────────────────────────────────────────────
+// Usage: wrap the JSX returned by every dashboard page component.
+//
+//   export default function AdminDashboard() {
+//     return (
+//       <PageWithSidebar>
+//         <h1 className="page-header__title">Hello</h1>
+//         <SectionCard title="Campaigns"> ... </SectionCard>
+//       </PageWithSidebar>
+//     );
+//   }
+
+function GenerationPill() {
+  const { isGenerating, progress, done, error, adTitle, dismiss } = useGeneration();
+  const location = useLocation();
+
+  const isOnCreatePage = location.pathname === "/study-coordinator/create";
+
+  if (!isGenerating) return null;
+
+  const activeIdx = GEN_STEPS.findIndex((s) => progress < s.threshold);
+  const currentStep = activeIdx === -1 ? GEN_STEPS[GEN_STEPS.length - 1] : GEN_STEPS[activeIdx];
+
+  // ── Small ring (pill) ───────────────────────────────────────────────────────
+  const ps = 36,
+    pst = 3,
+    pr = (ps - pst) / 2;
+  const pc = 2 * Math.PI * pr;
+  const poff = pc - (progress / 100) * pc;
+
+  const pillBg = done
+    ? "rgba(74,222,128,0.12)"
+    : error
+      ? "rgba(239,68,68,0.12)"
+      : "rgba(13,27,42,0.95)";
+  const pillBorder = done
+    ? "rgba(74,222,128,0.4)"
+    : error
+      ? "rgba(239,68,68,0.4)"
+      : "rgba(255,255,255,0.12)";
+
+  // ── Expanded overlay — shown automatically when on the create page ──────────
+  if (isOnCreatePage) {
+    const bs = 116,
+      bst = 7,
+      br = (bs - bst) / 2;
+    const bc = 2 * Math.PI * br;
+    const boff = bc - (progress / 100) * bc;
+
+    return (
+      <div
+        className="gen-pill-overlay"
+        style={{
+          position: "fixed",
+          top: 0,
+          bottom: 0,
+          right: 0,
+          zIndex: 998,
+          background: "rgba(10,18,30,0.97)",
+          backdropFilter: "blur(20px)",
+          overflowY: "auto",
+          animation: "fadeIn 0.2s ease",
+        }}
+      >
+        <style>{`@keyframes fadeIn{from{opacity:0}to{opacity:1}} @keyframes spin{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}`}</style>
+
+        {/* Inner wrapper — auto margins center it when there's room; padding lets it breathe */}
+        <div
+          style={{
+            display: "flex",
+            flexDirection: "column",
+            alignItems: "center",
+            gap: 28,
+            padding: "40px 24px",
+            margin: "auto",
+            width: "100%",
+            maxWidth: 560,
+            boxSizing: "border-box",
+          }}
+        >
+          {/* Big progress ring */}
+          <div style={{ position: "relative", width: bs, height: bs }}>
+            <svg width={bs} height={bs} style={{ transform: "rotate(-90deg)" }}>
+              <circle
+                cx={bs / 2}
+                cy={bs / 2}
+                r={br}
+                fill="none"
+                stroke="rgba(255,255,255,0.06)"
+                strokeWidth={bst}
+              />
+              <circle
+                cx={bs / 2}
+                cy={bs / 2}
+                r={br}
+                fill="none"
+                stroke={done ? "#4ade80" : error ? "#ef4444" : "url(#bigGrad)"}
+                strokeWidth={bst}
+                strokeLinecap="round"
+                strokeDasharray={bc}
+                strokeDashoffset={boff}
+                style={{ transition: "stroke-dashoffset 0.4s ease" }}
+              />
+              <defs>
+                <linearGradient id="bigGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+                  <stop offset="0%" stopColor="#4ade80" />
+                  <stop offset="100%" stopColor="#22d3ee" />
+                </linearGradient>
+              </defs>
+            </svg>
+            <div
+              style={{
+                position: "absolute",
+                inset: 0,
+                display: "flex",
+                flexDirection: "column",
+                alignItems: "center",
+                justifyContent: "center",
+                gap: 4,
+              }}
+            >
+              <span
+                style={{
+                  fontSize: "1.55rem",
+                  fontWeight: 800,
+                  color: done ? "#4ade80" : "#fff",
+                  fontVariantNumeric: "tabular-nums",
+                  lineHeight: 1,
+                }}
+              >
+                {progress}%
+              </span>
+              <Sparkles size={13} style={{ color: done ? "#4ade80" : "#22d3ee" }} />
+            </div>
+          </div>
+
+          {/* Title & status */}
+          <div style={{ textAlign: "center" }}>
+            <p style={{ fontSize: "1.05rem", fontWeight: 700, color: "#fff", margin: "0 0 6px" }}>
+              {done ? `${adTitle} — Ready!` : error ? "Generation Failed" : adTitle}
+            </p>
+            <p style={{ fontSize: "0.8rem", color: "rgba(255,255,255,0.38)", margin: 0 }}>
+              {done
+                ? "Submitted for review"
+                : error || "Running in background — you can navigate away safely"}
+            </p>
+          </div>
+
+          {/* Step list */}
+          <div
+            style={{
+              display: "flex",
+              flexDirection: "column",
+              gap: 7,
+              width: "100%",
+              maxWidth: 420,
+            }}
+          >
+            {GEN_STEPS.map((step, i) => {
+              const stepDone = progress >= step.threshold;
+              const stepActive =
+                !stepDone && (i === 0 ? progress > 0 : progress >= GEN_STEPS[i - 1].threshold);
+              return (
+                <div
+                  key={i}
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 10,
+                    padding: "9px 12px",
+                    borderRadius: 10,
+                    background: stepDone
+                      ? "rgba(74,222,128,0.07)"
+                      : stepActive
+                        ? "rgba(34,211,238,0.07)"
+                        : "rgba(255,255,255,0.03)",
+                    border: `1px solid ${stepDone ? "rgba(74,222,128,0.18)" : stepActive ? "rgba(34,211,238,0.18)" : "rgba(255,255,255,0.05)"}`,
+                    transition: "all 0.3s ease",
+                  }}
+                >
+                  <div
+                    style={{
+                      width: 20,
+                      height: 20,
+                      borderRadius: "50%",
+                      flexShrink: 0,
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      background: stepDone
+                        ? "rgba(74,222,128,0.2)"
+                        : stepActive
+                          ? "rgba(34,211,238,0.15)"
+                          : "transparent",
+                      border: `1.5px solid ${stepDone ? "#4ade80" : stepActive ? "#22d3ee" : "rgba(255,255,255,0.12)"}`,
+                    }}
+                  >
+                    {stepDone ? (
+                      <CheckCircle2 size={11} style={{ color: "#4ade80" }} />
+                    ) : stepActive ? (
+                      <div
+                        style={{ width: 5, height: 5, borderRadius: "50%", background: "#22d3ee" }}
+                      />
+                    ) : null}
+                  </div>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <p
+                      style={{
+                        fontSize: "0.78rem",
+                        fontWeight: stepActive ? 700 : 500,
+                        color: stepDone
+                          ? "#4ade80"
+                          : stepActive
+                            ? "#22d3ee"
+                            : "rgba(255,255,255,0.28)",
+                        margin: 0,
+                      }}
+                    >
+                      {step.label}
+                    </p>
+                    <p
+                      style={{
+                        fontSize: "0.68rem",
+                        color: "rgba(255,255,255,0.22)",
+                        margin: "1px 0 0",
+                      }}
+                    >
+                      {step.desc}
+                    </p>
+                  </div>
+                  {stepActive && !done && (
+                    <div
+                      style={{
+                        width: 12,
+                        height: 12,
+                        borderRadius: "50%",
+                        border: "2px solid #22d3ee",
+                        borderTopColor: "transparent",
+                        animation: "spin 0.8s linear infinite",
+                        flexShrink: 0,
+                      }}
+                    />
+                  )}
+                </div>
+              );
+            })}
+          </div>
+
+          {(done || error) && (
+            <button
+              onClick={dismiss}
+              style={{
+                padding: "10px 36px",
+                borderRadius: 10,
+                background: "var(--color-accent)",
+                color: "#fff",
+                border: "none",
+                cursor: "pointer",
+                fontWeight: 600,
+                fontSize: "0.875rem",
+                fontFamily: "inherit",
+              }}
+            >
+              {error ? "Dismiss" : "Done"}
+            </button>
+          )}
+        </div>
+        {/* end inner wrapper */}
+      </div>
+    );
+  }
+
+  // ── Collapsed pill (bottom-right, shown on all other pages) ────────────────
+  return (
+    <div
+      style={{
+        position: "fixed",
+        bottom: 24,
+        right: 24,
+        zIndex: 999,
+        display: "flex",
+        alignItems: "center",
+        gap: 12,
+        padding: "10px 14px 10px 10px",
+        borderRadius: 16,
+        background: pillBg,
+        border: `1px solid ${pillBorder}`,
+        backdropFilter: "blur(12px)",
+        boxShadow: "0 8px 32px rgba(0,0,0,0.4)",
+        maxWidth: 320,
+        cursor: "default",
+        transition: "all 0.3s ease",
+      }}
+    >
+      {/* Mini ring */}
+      <div style={{ position: "relative", width: ps, height: ps, flexShrink: 0 }}>
+        <svg width={ps} height={ps} style={{ transform: "rotate(-90deg)" }}>
+          <circle
+            cx={ps / 2}
+            cy={ps / 2}
+            r={pr}
+            fill="none"
+            stroke="rgba(255,255,255,0.1)"
+            strokeWidth={pst}
+          />
+          <circle
+            cx={ps / 2}
+            cy={ps / 2}
+            r={pr}
+            fill="none"
+            stroke={done ? "#4ade80" : error ? "#ef4444" : "url(#pillGrad)"}
+            strokeWidth={pst}
+            strokeLinecap="round"
+            strokeDasharray={pc}
+            strokeDashoffset={poff}
+            style={{ transition: "stroke-dashoffset 0.3s ease" }}
+          />
+          <defs>
+            <linearGradient id="pillGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+              <stop offset="0%" stopColor="#4ade80" />
+              <stop offset="100%" stopColor="#22d3ee" />
+            </linearGradient>
+          </defs>
+        </svg>
+        <div
+          style={{
+            position: "absolute",
+            inset: 0,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+          }}
+        >
+          <Sparkles size={12} style={{ color: done ? "#4ade80" : "#22d3ee" }} />
+        </div>
+      </div>
+
+      {/* Text */}
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <p
+          style={{
+            fontSize: "0.78rem",
+            fontWeight: 700,
+            color: "#fff",
+            margin: 0,
+            whiteSpace: "nowrap",
+            overflow: "hidden",
+            textOverflow: "ellipsis",
+          }}
+        >
+          {done ? `${adTitle} — Strategy ready!` : error ? "Generation failed" : adTitle}
+        </p>
+        <p
+          style={{
+            fontSize: "0.68rem",
+            color: "rgba(255,255,255,0.45)",
+            margin: "2px 0 0",
+            whiteSpace: "nowrap",
+            overflow: "hidden",
+            textOverflow: "ellipsis",
+          }}
+        >
+          {done ? "Submitted for review" : error || currentStep.label}
+        </p>
+      </div>
+
+      {/* % or dismiss */}
+      {done || error ? (
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            dismiss();
+          }}
+          style={{
+            background: "none",
+            border: "none",
+            cursor: "pointer",
+            padding: 2,
+            color: "rgba(255,255,255,0.4)",
+            flexShrink: 0,
+            display: "flex",
+          }}
+        >
+          <X size={14} />
+        </button>
+      ) : (
+        <span
+          style={{
+            fontSize: "0.72rem",
+            fontWeight: 700,
+            color: "#4ade80",
+            flexShrink: 0,
+            fontVariantNumeric: "tabular-nums",
+          }}
+        >
+          {progress}%
+        </span>
+      )}
+    </div>
+  );
+}
+
+export function PageWithSidebar({ children }) {
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+
+  return (
+    <div className="flex min-h-screen" style={{ backgroundColor: "var(--color-page-bg)" }}>
+      {/* Mobile backdrop — click to close */}
+      {sidebarOpen && <div className="sidebar-backdrop" onClick={() => setSidebarOpen(false)} />}
+
+      <AppSidebar isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} />
+
+      <main
+        className="flex-1 overflow-auto min-w-0 page-fade-in"
+        style={{ display: "flex", flexDirection: "column" }}
+      >
+        {/* Mobile top bar — hamburger + brand name */}
+        <div className="sidebar-mobile-bar">
+          <button
+            className="sidebar-hamburger"
+            onClick={() => setSidebarOpen(true)}
+            aria-label="Open navigation"
+          >
+            <Menu size={20} />
+          </button>
+          <img
+            src="/alt1_trails_logo.svg"
+            alt="ALT Trials"
+            style={{ height: "44px", width: "auto" }}
+          />
+        </div>
+
+        <div className="page-main-content" style={{ flex: 1, padding: "2rem" }}>
+          {children}
+        </div>
+      </main>
+
+      <GenerationPill />
+    </div>
+  );
+}
+
+// Keep legacy alias.
+export const DashboardLayout = PageWithSidebar;
+
+// ─── SectionCard ─────────────────────────────────────────────────────────────
+// Usage: wrap any logical content block on a dashboard page.
+//
+//   <SectionCard
+//     title="Active Campaigns"
+//     subtitle="Campaigns currently under review"
+//     actions={<button className="btn--accent">+ New</button>}
+//   >
+//     <CampaignsTable />
+//   </SectionCard>
+
+export function SectionCard({ title, subtitle, children, actions, className = "" }) {
+  return (
+    <div className={`page-card ${className}`}>
+      {(title || actions) && (
+        <div className="page-card__header">
+          <div>
+            {title && <h3 className="page-card__title">{title}</h3>}
+            {subtitle && <p className="page-card__subtitle">{subtitle}</p>}
+          </div>
+          {actions && <div className="flex gap-2">{actions}</div>}
+        </div>
+      )}
+      <div className="page-card__body">{children}</div>
+    </div>
+  );
+}
+
+// Keep legacy alias.
+export const Card = SectionCard;
+
+// ─── CampaignStatusBadge ──────────────────────────────────────────────────────
+// Usage: pass the advertisement's `status` field from the API response.
+//
+//   <CampaignStatusBadge status={ad.status} />
+//
+// Valid status values (matches Advertisement.status in models.py):
+//   draft | strategy_created | under_review | ethics_review |
+//   approved | published | paused | optimizing
+
+const STATUS_TO_CSS_MODIFIER = {
+  draft: "status-badge--draft",
+  strategy_created: "status-badge--draft",
+  under_review: "status-badge--review",
+  ethics_review: "status-badge--review",
+  approved: "status-badge--approved",
+  published: "status-badge--published",
+  paused: "status-badge--paused",
+  optimizing: "status-badge--draft",
+};
+
+export function CampaignStatusBadge({ status }) {
+  const modifier = STATUS_TO_CSS_MODIFIER[status] || "status-badge--draft";
+  return <span className={`status-badge ${modifier}`}>{status?.replace(/_/g, " ")}</span>;
+}
+
+// Keep legacy alias.
+export const StatusBadge = CampaignStatusBadge;
+
+// ─── MetricSummaryCard ────────────────────────────────────────────────────────
+// Usage: arrange 3–4 in a responsive grid at the top of analytics pages.
+//
+//   <div className="grid grid-cols-4 gap-4">
+//     <MetricSummaryCard label="Total Campaigns" value={42} icon={Megaphone} trend={12} />
+//     <MetricSummaryCard label="Click-Through Rate" value="3.8%" icon={BarChart3} trend={-2} />
+//   </div>
+
+export function MetricSummaryCard({ label, value, icon: Icon, trend }) {
+  return (
+    <div className="metric-tile">
+      <div className="flex items-center justify-between mb-3">
+        <p className="metric-tile__label">{label}</p>
+        {Icon && (
+          <div className="metric-tile__icon-wrap">
+            <Icon size={15} style={{ color: "var(--color-accent)" }} />
+          </div>
+        )}
+      </div>
+      <p className="metric-tile__value">{value}</p>
+      {trend != null && (
+        <p className={trend > 0 ? "metric-tile__trend--up" : "metric-tile__trend--down"}>
+          {trend > 0 ? "↑" : "↓"} {Math.abs(trend)}% vs last period
+        </p>
+      )}
+    </div>
+  );
+}
+
+// Keep legacy alias.
+export const StatCard = MetricSummaryCard;
