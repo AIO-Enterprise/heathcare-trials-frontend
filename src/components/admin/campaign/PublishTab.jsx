@@ -9,7 +9,6 @@ import {
   Sparkles,
   Zap,
 } from "lucide-react";
-import { adsAPI } from "../../../services/api";
 import { SectionCard } from "../../shared/Layout";
 import ActionButton from "./ActionButton";
 import AdPreviewTabs from "./AdPreviewTabs";
@@ -204,7 +203,7 @@ export default function PublishTab({
                         </div>
                         <div style={{ display: "flex", gap: "8px" }}>
                           <a
-                            href={adsAPI.websitePreviewUrl(id)}
+                            href={ad.hosted_url || ad.output_url}
                             target="_blank"
                             rel="noopener noreferrer"
                             style={{
@@ -224,7 +223,7 @@ export default function PublishTab({
                             <Eye size={13} /> Preview
                           </a>
                           <a
-                            href={adsAPI.websiteDownloadUrl(id)}
+                            href={ad.website_download_url || ad.hosted_url || ad.output_url}
                             download="landing-page.html"
                             style={{
                               display: "inline-flex",

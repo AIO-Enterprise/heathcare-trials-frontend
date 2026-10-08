@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Download, FileText, X } from "lucide-react";
-import { adsAPI } from "../../../services/api";
+import { useBlobUrl } from "../../shared/useBlobUrl";
 
 // ─── Protocol document preview modal ─────────────────────────────────────────
 
@@ -19,14 +19,15 @@ function DocPreviewModal({ doc, adId, onClose }) {
       : ["txt", "md"].includes(ext)
         ? "text"
         : "download";
-  const url = adsAPI.getDocFileUrl(adId, doc.id);
+  const url = doc.file_url;
+  const pdfUrl = useBlobUrl(url, mode);
 
   const [textContent, setTextContent] = useState(null);
   const [textError, setTextError] = useState(false);
 
   useEffect(() => {
-    if (mode !== "text") return;
-    fetch(url)
+    if (mode !== "text" || !url) return;
+    fetch(url, { credentials: "include" })
       .then((r) => {
         if (!r.ok) throw new Error();
         return r.text();
@@ -154,9 +155,9 @@ function DocPreviewModal({ doc, adId, onClose }) {
 
         {/* Body */}
         <div style={{ flex: 1, overflow: "hidden", position: "relative", minHeight: 560 }}>
-          {mode === "pdf" && (
+          {mode === "pdf" && pdfUrl && (
             <iframe
-              src={url}
+              src={pdfUrl}
               title={doc.title}
               style={{
                 width: "100%",

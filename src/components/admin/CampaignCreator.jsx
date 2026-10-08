@@ -981,7 +981,7 @@ const ACTIVE_SOCIAL_PLATFORMS = new Set(["Meta Ads", "Google Ads"]);
 
 export default function CampaignCreator() {
   const navigate = useNavigate();
-  const { startGeneration, isGenerating } = useGeneration();
+  const { startGeneration, isPending, isGenerating } = useGeneration();
   const [step, setStep] = useState(1);
   const [loading, setLoading] = useState(false);
   const [createdAd, setCreatedAd] = useState(null);
@@ -1338,7 +1338,7 @@ export default function CampaignCreator() {
   return (
     <PageWithSidebar>
       {/* ── Generation blocking overlay ─────────────────────────────────────── */}
-      {isGenerating && (
+      {(isPending || isGenerating) && (
         <div
           style={{
             position: "fixed",

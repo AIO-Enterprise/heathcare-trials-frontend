@@ -583,16 +583,14 @@ function WebsitePane({ ad }) {
     );
   }
 
-  // Use src (not srcDoc) so the iframe has a real origin (localhost:5173).
-  // srcDoc always gives a null origin, breaking fetch('/api/chat').
-  // The backend exempts /website endpoints from X-Frame-Options: DENY.
-  const previewUrl = adsAPI.websitePreviewUrl(ad.id);
+  // Landing-page endpoints are public — iframe/download use the backend-minted URLs verbatim.
+  const previewUrl = ad.hosted_url || ad.output_url;
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
       <div style={{ display: "flex", justifyContent: "flex-end" }}>
         <a
-          href={adsAPI.websiteDownloadUrl(ad.id)}
+          href={ad.website_download_url || previewUrl}
           style={{
             display: "inline-flex",
             alignItems: "center",

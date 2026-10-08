@@ -1,6 +1,5 @@
 import React from "react";
 import { SectionCard } from "../../shared/Layout";
-import { adsAPI } from "../../../services/api";
 import { typeLabel } from "../publisherUtils";
 import {
   AlertCircle,
@@ -142,7 +141,7 @@ export default function DeployTab({ ads, hostingId, hostError, onHost }) {
                     )}
                     {isHosting ? "Hosting…" : ad.hosted_url ? "Re-host" : "Host"}
                   </button>
-                  <a href={adsAPI.websiteDownloadUrl(ad.id)} className="btn--inline-action--ghost">
+                  <a href={ad.website_download_url || ad.hosted_url || ad.output_url} className="btn--inline-action--ghost">
                     <Download size={11} /> Download
                   </a>
                 </div>

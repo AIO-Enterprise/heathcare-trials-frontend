@@ -42,7 +42,8 @@ export const GEN_STEPS = [
 const GenerationContext = createContext(null);
 
 export function GenerationProvider({ children }) {
-  const [isGenerating, setIsGenerating] = useState(false);
+  const [isPending, setIsPending] = useState(false);   // waiting for backend to accept
+  const [isGenerating, setIsGenerating] = useState(false); // backend confirmed, progress running
   const [progress, setProgress] = useState(0);
   const [done, setDone] = useState(false);
   const [error, setError] = useState(null);
@@ -57,8 +58,6 @@ export function GenerationProvider({ children }) {
     setProgress(Math.round(pct));
   }, []);
 
-  // Poll GET /{adId} until the ad's status leaves the "generating" state.
-  // Returns the final ad object, or throws if it times out or resets to draft.
   const _pollUntilReady = useCallback(async (adId, timeoutMs = 300_000) => {
     const deadline = Date.now() + timeoutMs;
     while (Date.now() < deadline) {
@@ -72,13 +71,12 @@ export function GenerationProvider({ children }) {
   const startGeneration = useCallback(
     async (adId, title, adTypes = []) => {
       if (timerRef.current) clearInterval(timerRef.current);
-      startedAt.current = Date.now();
       setAdTitle(title || "Campaign");
-      setIsGenerating(true);
-      setProgress(2);
+      setIsPending(true);   // show spinner — waiting for backend to accept
+      setIsGenerating(false);
+      setProgress(0);
       setDone(false);
       setError(null);
-      timerRef.current = setInterval(tick, 250);
 
       const types = Array.isArray(adTypes) ? adTypes : [adTypes];
       const hasAds = types.includes("advertisements") || types.includes("ads");
@@ -87,10 +85,17 @@ export function GenerationProvider({ children }) {
       try {
         // Kick off strategy — returns immediately with status=generating
         await adsAPI.generateStrategy(adId);
+
+        // Backend confirmed — now start the progress animation
+        setIsPending(false);
+        startedAt.current = Date.now();
+        setIsGenerating(true);
+        setProgress(2);
+        timerRef.current = setInterval(tick, 250);
+
         // Poll until the background task finishes (status moves off "generating")
         const ad = await _pollUntilReady(adId);
         if (ad.status === "draft") {
-          // Backend reset to draft — strategy generation failed server-side
           throw new Error("Strategy generation failed on the server. Please try again.");
         }
         // submitForReview runs LLM in background (returns immediately)
@@ -109,6 +114,7 @@ export function GenerationProvider({ children }) {
         }, 5000);
       } catch (err) {
         clearInterval(timerRef.current);
+        setIsPending(false);
         setError(err?.message || "Strategy generation failed");
         setIsGenerating(false);
         setProgress(0);
@@ -119,6 +125,7 @@ export function GenerationProvider({ children }) {
 
   const dismiss = useCallback(() => {
     clearInterval(timerRef.current);
+    setIsPending(false);
     setIsGenerating(false);
     setProgress(0);
     setDone(false);
@@ -130,7 +137,7 @@ export function GenerationProvider({ children }) {
 
   return (
     <GenerationContext.Provider
-      value={{ isGenerating, progress, done, error, adTitle, startGeneration, dismiss }}
+      value={{ isPending, isGenerating, progress, done, error, adTitle, startGeneration, dismiss }}
     >
       {children}
     </GenerationContext.Provider>

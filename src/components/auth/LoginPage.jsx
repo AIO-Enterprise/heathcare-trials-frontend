@@ -52,7 +52,7 @@ export default function LoginPage() {
         alignItems: "center",
         justifyContent: "center",
         padding: "1.5rem",
-        backgroundColor: "var(--color-sidebar-bg)",
+        backgroundColor: "#0f172a",
         backgroundImage: `linear-gradient(rgba(255,255,255,0.015) 1px, transparent 1px),
                         linear-gradient(90deg, rgba(255,255,255,0.015) 1px, transparent 1px)`,
         backgroundSize: "48px 48px",

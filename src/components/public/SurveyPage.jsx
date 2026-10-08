@@ -11,11 +11,9 @@
 
 import React, { useState, useEffect } from "react";
 import { useParams } from "react-router-dom";
-import { surveyAPI } from "../../services/api";
+import { surveyAPI, API_BASE } from "../../services/api";
 
-const API_BASE = import.meta.env.VITE_API_URL || "/api";
-
-// ── Fetch campaign data (public, no auth) ─────────────────────────────────────
+// ── Fetch campaign data (public, no auth — cookies intentionally omitted) ─────
 async function fetchCampaign(adId) {
   const res = await fetch(`${API_BASE}/advertisements/${adId}/public`);
   if (!res.ok) throw new Error("Campaign not found");

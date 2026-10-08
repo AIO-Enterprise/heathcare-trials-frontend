@@ -6,19 +6,15 @@
  * All functions return parsed JSON or throw errors.
  */
 
-const API_BASE = import.meta.env.VITE_API_URL || "/api";
+export const API_BASE = (import.meta.env.VITE_BACKEND_URL || "").replace(/\/$/, "") + "/api";
 
 // ─── Token refresh helpers ────────────────────────────────────────────────────
+// Session lives in an HttpOnly cookie; JS only reads the non-secret token_exp
+// timestamp cookie to schedule proactive refresh.
 
 function _getTokenExp() {
-  const token = localStorage.getItem("token");
-  if (!token) return null;
-  try {
-    const payload = JSON.parse(atob(token.split(".")[1]));
-    return payload.exp * 1000; // convert to ms
-  } catch {
-    return null;
-  }
+  const m = document.cookie.match(/(?:^|;\s*)token_exp=(\d+)/);
+  return m ? parseInt(m[1], 10) * 1000 : null; // convert to ms
 }
 
 let _refreshPromise = null;
@@ -28,21 +24,18 @@ async function _refreshToken() {
   if (_refreshPromise) return _refreshPromise;
 
   _refreshPromise = (async () => {
-    const token = localStorage.getItem("token");
-    if (!token) throw new Error("No token");
     const res = await fetch(`${API_BASE}/auth/refresh`, {
       method: "POST",
-      headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+      credentials: "include",
     });
     if (!res.ok) {
       // Refresh failed — clear session and redirect to login
-      localStorage.removeItem("token");
+      localStorage.removeItem("user");
       window.dispatchEvent(new CustomEvent("auth:expired"));
       throw new Error("Session expired");
     }
-    const data = await res.json();
-    localStorage.setItem("token", data.access_token);
-    return data.access_token;
+    await res.json();
+    return true;
   })().finally(() => {
     _refreshPromise = null;
   });
@@ -71,10 +64,8 @@ async function request(endpoint, options = {}) {
     }
   }
 
-  const token = localStorage.getItem("token");
   const headers = {
     "Content-Type": "application/json",
-    ...(token && { Authorization: `Bearer ${token}` }),
     ...options.headers,
   };
 
@@ -82,6 +73,7 @@ async function request(endpoint, options = {}) {
   try {
     res = await fetch(`${API_BASE}${endpoint}`, {
       ...options,
+      credentials: "include",
       headers,
     });
   } catch {
@@ -91,10 +83,11 @@ async function request(endpoint, options = {}) {
   // On 401, attempt one token refresh then retry
   if (res.status === 401 && endpoint !== "/auth/refresh" && endpoint !== "/auth/login") {
     try {
-      const newToken = await _refreshToken();
+      await _refreshToken();
       const retryRes = await fetch(`${API_BASE}${endpoint}`, {
         ...options,
-        headers: { ...headers, Authorization: `Bearer ${newToken}` },
+        credentials: "include",
+        headers,
       });
       if (!retryRes.ok) {
         const err = await retryRes.json().catch(() => ({ detail: retryRes.statusText }));
@@ -108,9 +101,10 @@ async function request(endpoint, options = {}) {
   }
 
   if (!res.ok) {
-    // Token expired or invalid — clear session and redirect to login
-    if (res.status === 401) {
-      localStorage.removeItem("token");
+    // Token expired or invalid — clear session and redirect to login.
+    // Skip for /auth/login itself: a 401 there means wrong credentials,
+    // not an expired session — let the error bubble to the login form.
+    if (res.status === 401 && endpoint !== "/auth/login") {
       localStorage.removeItem("user");
       window.location.href = "/login";
       return;
@@ -135,22 +129,18 @@ async function request(endpoint, options = {}) {
 }
 
 async function requestBlob(endpoint) {
-  const token = localStorage.getItem("token");
-  const res = await fetch(`${API_BASE}${endpoint}`, {
-    headers: { ...(token && { Authorization: `Bearer ${token}` }) },
-  });
+  const res = await fetch(`${API_BASE}${endpoint}`, { credentials: "include" });
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
   return res.blob();
 }
 
 async function requestFormData(endpoint, formData) {
-  const token = localStorage.getItem("token");
   // Do NOT set Content-Type — browser sets multipart/form-data with boundary automatically
   let res;
   try {
     res = await fetch(`${API_BASE}${endpoint}`, {
       method: "POST",
-      headers: { ...(token && { Authorization: `Bearer ${token}` }) },
+      credentials: "include",
       body: formData,
     });
   } catch {
@@ -180,6 +170,9 @@ export const authAPI = {
   // Re-issue a fresh token without requiring the user to re-enter credentials.
   refresh: () => request("/auth/refresh", { method: "POST" }),
 
+  // Clear the auth cookie on this browser.
+  logout: () => request("/auth/logout", { method: "POST" }),
+
   // Check if an email is already registered (used at onboarding step 1).
   checkEmail: (email) => request(`/auth/check-email?email=${encodeURIComponent(email)}`),
 
@@ -203,13 +196,12 @@ export const onboardingAPI = {
     }),
 
   uploadLogo: async (file) => {
-    const token = localStorage.getItem("token");
     const formData = new FormData();
     formData.append("file", file);
 
     const res = await fetch(`${API_BASE}/onboarding/logo`, {
       method: "POST",
-      headers: { Authorization: `Bearer ${token}` },
+      credentials: "include",
       body: formData,
     });
     if (!res.ok) {
@@ -220,8 +212,6 @@ export const onboardingAPI = {
   },
 
   uploadDocument: async (docType, title, content, file) => {
-    const token = localStorage.getItem("token");
-
     const readErr = async (res, fallbackLabel) => {
       const raw = await res.text().catch(() => "");
       let detail = "";
@@ -237,16 +227,17 @@ export const onboardingAPI = {
     const postJson = async (path, body) => {
       const res = await fetch(`${API_BASE}${path}`, {
         method: "POST",
-        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body),
       });
       if (!res.ok) throw new Error(await readErr(res, "Document upload failed"));
       return res.json();
     };
 
-    // When a file is present, use the WAF-safe S3 presign flow on the shared
+    // When a file is present, use the WAF-safe presign flow on the shared
     // /documents endpoints (whitelisted for pre-onboarded users). Fall back to
-    // the multipart /onboarding/documents route when S3 is not configured, or
+    // the multipart /onboarding/documents route when presigning is not configured, or
     // when the caller only has a content blob (no file).
     if (file) {
       const contentType = file.type || "application/octet-stream";
@@ -258,7 +249,7 @@ export const onboardingAPI = {
         file_size: file.size,
       });
 
-      if (presign.method === "s3") {
+      if (presign.method === "presigned") {
         const s3Res = await fetch(presign.upload_url, {
           method: "PUT",
           headers: { "Content-Type": presign.content_type || contentType },
@@ -287,7 +278,7 @@ export const onboardingAPI = {
 
     const res = await fetch(`${API_BASE}/onboarding/documents`, {
       method: "POST",
-      headers: { Authorization: `Bearer ${token}` },
+      credentials: "include",
       body: formData,
     });
     if (!res.ok) throw new Error(await readErr(res, "Document upload failed"));
@@ -333,10 +324,9 @@ export const brandKitAPI = {
   uploadPdf: (file) => {
     const form = new FormData();
     form.append("file", file);
-    const token = localStorage.getItem("token");
     return fetch(`${API_BASE}/brand-kit/upload-pdf`, {
       method: "POST",
-      headers: token ? { Authorization: `Bearer ${token}` } : {},
+      credentials: "include",
       body: form,
     }).then(async (res) => {
       if (!res.ok) {
@@ -350,10 +340,9 @@ export const brandKitAPI = {
   extractPdf: (file) => {
     const form = new FormData();
     form.append("file", file);
-    const token = localStorage.getItem("token");
     return fetch(`${API_BASE}/brand-kit/extract-pdf`, {
       method: "POST",
-      headers: token ? { Authorization: `Bearer ${token}` } : {},
+      credentials: "include",
       body: form,
     }).then(async (res) => {
       if (!res.ok) {
@@ -402,15 +391,13 @@ export const documentsAPI = {
   // Upload a document with a file attachment.
   // Used by MyCompany "Add Document".
   //
-  // Production (CloudFront + WAF): presign → PUT direct to S3 → confirm.
+  // Production (CloudFront + WAF): presign → PUT direct to storage → confirm.
   // The multipart body never traverses CloudFront, so WAF body-inspection
   // rules (size + XSS patterns that match binary PDFs) cannot block it.
   //
-  // Localhost / no-S3: backend returns method="direct" and we fall back to
+  // Localhost / no-presign: backend returns method="direct" and we fall back to
   // the multipart /documents/upload endpoint.
   upload: async (docType, title, file) => {
-    const token = localStorage.getItem("token");
-
     const readErr = async (res, fallbackLabel) => {
       const raw = await res.text().catch(() => "");
       let detail = "";
@@ -426,7 +413,8 @@ export const documentsAPI = {
     const postJson = async (path, body) => {
       const res = await fetch(`${API_BASE}${path}`, {
         method: "POST",
-        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body),
       });
       if (!res.ok) throw new Error(await readErr(res, "Document upload failed"));
@@ -435,7 +423,7 @@ export const documentsAPI = {
 
     const contentType = file.type || "application/octet-stream";
 
-    // 1. Ask backend whether to use S3 or direct multipart
+    // 1. Ask backend whether to use presigned or direct multipart
     const presign = await postJson("/documents/presign", {
       doc_type: docType,
       title,
@@ -444,9 +432,9 @@ export const documentsAPI = {
       file_size: file.size,
     });
 
-    if (presign.method === "s3") {
-      // 2a. PUT directly to S3 — bypasses CloudFront WAF entirely.
-      // Content-Type MUST match what the URL was signed with or S3 returns 403.
+    if (presign.method === "presigned") {
+      // 2a. PUT directly to the presigned URL (S3 or Azure Blob) — bypasses CloudFront WAF entirely.
+      // Content-Type MUST match what the URL was signed with or the provider returns 403.
       const s3Res = await fetch(presign.upload_url, {
         method: "PUT",
         headers: { "Content-Type": presign.content_type || contentType },
@@ -465,7 +453,7 @@ export const documentsAPI = {
       console.warn("S3 upload failed, falling back to direct:", s3Res.status, errBody);
     }
 
-    // 2b. Direct multipart fallback (localhost / S3 misconfig)
+    // 2b. Direct multipart fallback (localhost / presign misconfig)
     const formData = new FormData();
     formData.append("doc_type", docType);
     formData.append("title", title);
@@ -473,20 +461,11 @@ export const documentsAPI = {
 
     const res = await fetch(`${API_BASE}/documents/upload`, {
       method: "POST",
-      headers: { Authorization: `Bearer ${token}` },
+      credentials: "include",
       body: formData,
     });
     if (!res.ok) throw new Error(await readErr(res, "Document upload failed"));
     return res.json();
-  },
-
-  // Returns the authenticated URL to stream the file for preview.
-  // Token is passed as a query param so the browser can load it directly
-  // in an iframe or anchor without needing a custom Authorization header.
-  // When storage moves to Azure Blob, this will return the SAS URL instead.
-  getFileUrl: (docId) => {
-    const token = localStorage.getItem("token");
-    return `${API_BASE}/documents/${docId}/file?token=${encodeURIComponent(token)}`;
   },
 
   update: (docId, data) =>
@@ -519,21 +498,19 @@ export const adsAPI = {
 
   // Upload a campaign-specific protocol document.
   //
-  // Production (CloudFront): uses S3 pre-signed URL so the file goes browser → S3
+  // Production (CloudFront): uses a pre-signed URL so the file goes browser → storage
   // directly, completely bypassing CloudFront WAF body-size limits.
-  // Backend then downloads from S3, extracts text, saves to EFS.
+  // Backend then stores the bytes via the active storage backend and extracts text.
   //
-  // Localhost / no-S3: falls back to direct multipart upload (no WAF in the way).
+  // Localhost / no-presign: falls back to direct multipart upload (no WAF in the way).
   //
   // Supports files up to 50 MB.
   uploadDocument: async (adId, docType, title, file) => {
-    const token = localStorage.getItem("token");
-
     const postJson = async (path, body) => {
       const res = await fetch(`${API_BASE}${path}`, {
         method: "POST",
+        credentials: "include",
         headers: {
-          Authorization: `Bearer ${token}`,
           "Content-Type": "application/json",
         },
         body: JSON.stringify(body),
@@ -559,7 +536,7 @@ export const adsAPI = {
 
     const contentType = file.type || "application/octet-stream";
 
-    // 1. Ask backend: S3 or direct?
+    // 1. Ask backend: presigned or direct?
     const presign = await postJson(`/advertisements/${adId}/documents/presign`, {
       doc_type: docType,
       title,
@@ -568,10 +545,10 @@ export const adsAPI = {
       file_size: file.size,
     });
 
-    if (presign.method === "s3") {
-      // 2a. PUT file directly to S3 (bypasses CloudFront WAF entirely).
+    if (presign.method === "presigned") {
+      // 2a. PUT file directly to the presigned URL (bypasses CloudFront WAF entirely).
       // Must use the exact Content-Type the pre-signed URL was signed with,
-      // otherwise S3 returns 403 SignatureDoesNotMatch.
+      // otherwise the provider returns 403 SignatureDoesNotMatch.
       const s3Res = await fetch(presign.upload_url, {
         method: "PUT",
         headers: { "Content-Type": presign.content_type || contentType },
@@ -602,7 +579,7 @@ export const adsAPI = {
 
     const res = await fetch(`${API_BASE}/advertisements/${adId}/documents`, {
       method: "POST",
-      headers: { Authorization: `Bearer ${token}` },
+      credentials: "include",
       body: formData,
     });
     if (!res.ok) {
@@ -625,11 +602,6 @@ export const adsAPI = {
   },
 
   listDocuments: (adId) => request(`/advertisements/${adId}/documents`),
-
-  getDocFileUrl: (adId, docId) => {
-    const token = localStorage.getItem("token");
-    return `${API_BASE}/advertisements/${adId}/documents/${docId}/file?token=${encodeURIComponent(token)}`;
-  },
 
   generateStrategy: (adId) =>
     request(`/advertisements/${adId}/generate-strategy`, { method: "POST" }),
@@ -663,10 +635,10 @@ export const adsAPI = {
 
   hostPage: (adId) => request(`/advertisements/${adId}/host-page`, { method: "POST" }),
 
-  // Returns URL strings (not API calls) — used for preview/download <a> hrefs.
-  // No token needed: landing page is public (no secrets, safe as Meta Ads redirect URL).
-  websitePreviewUrl: (adId) => `/api/advertisements/${adId}/website`,
-  websiteDownloadUrl: (adId) => `/api/advertisements/${adId}/website?download=true`,
+  getHybridVoiceWsUrl: async (adId) => {
+    const { ws_url } = await request(`/advertisements/${adId}/voice-ws-url`);
+    return ws_url;
+  },
 
   minorEditStrategy: (adId, data) =>
     request(`/advertisements/${adId}/minor-edit`, {

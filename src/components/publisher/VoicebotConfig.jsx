@@ -317,9 +317,7 @@ export default function VoicebotConfig({ ad }) {
       });
       streamRef.current = stream;
 
-      const token = localStorage.getItem("token") || "";
-      const proto = window.location.protocol === "https:" ? "wss:" : "ws:";
-      const wsUrl = `${proto}//${window.location.host}/api/advertisements/${ad.id}/voice/ws?token=${encodeURIComponent(token)}`;
+      const wsUrl = await adsAPI.getHybridVoiceWsUrl(ad.id);
 
       const ctx = new AudioContext({ sampleRate: 16000 });
       ctxRef.current = ctx;

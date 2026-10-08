@@ -905,12 +905,55 @@ export const Sidebar = AppSidebar;
 //   }
 
 function GenerationPill() {
-  const { isGenerating, progress, done, error, adTitle, dismiss } = useGeneration();
+  const { isPending, isGenerating, progress, done, error, adTitle, dismiss } = useGeneration();
   const location = useLocation();
 
   const isOnCreatePage = location.pathname === "/study-coordinator/create";
 
-  if (!isGenerating) return null;
+  if (!isPending && !isGenerating && !error) return null;
+
+  // ── Pending pill — shown while waiting for backend to accept the request ──
+  if (isPending && !isGenerating) {
+    return (
+      <div
+        style={{
+          position: "fixed",
+          bottom: 24,
+          right: 24,
+          zIndex: 999,
+          display: "flex",
+          alignItems: "center",
+          gap: 12,
+          padding: "10px 16px",
+          borderRadius: 16,
+          background: "rgba(13,27,42,0.95)",
+          border: "1px solid rgba(255,255,255,0.12)",
+          backdropFilter: "blur(12px)",
+          boxShadow: "0 8px 32px rgba(0,0,0,0.4)",
+        }}
+      >
+        <div
+          style={{
+            width: 16,
+            height: 16,
+            borderRadius: "50%",
+            border: "2px solid #22d3ee",
+            borderTopColor: "transparent",
+            animation: "spin 0.8s linear infinite",
+            flexShrink: 0,
+          }}
+        />
+        <div>
+          <p style={{ fontSize: "0.78rem", fontWeight: 700, color: "#fff", margin: 0 }}>
+            {adTitle || "Campaign"}
+          </p>
+          <p style={{ fontSize: "0.68rem", color: "rgba(255,255,255,0.45)", margin: "2px 0 0" }}>
+            Sending to server…
+          </p>
+        </div>
+      </div>
+    );
+  }
 
   const activeIdx = GEN_STEPS.findIndex((s) => progress < s.threshold);
   const currentStep = activeIdx === -1 ? GEN_STEPS[GEN_STEPS.length - 1] : GEN_STEPS[activeIdx];
@@ -1024,7 +1067,7 @@ function GenerationPill() {
               >
                 {progress}%
               </span>
-              <Sparkles size={13} style={{ color: done ? "#4ade80" : "#22d3ee" }} />
+              <Sparkles size={13} style={{ color: done ? "#4ade80" : error ? "#ef4444" : "#22d3ee" }} />
             </div>
           </div>
 
@@ -1225,7 +1268,7 @@ function GenerationPill() {
             justifyContent: "center",
           }}
         >
-          <Sparkles size={12} style={{ color: done ? "#4ade80" : "#22d3ee" }} />
+          <Sparkles size={12} style={{ color: done ? "#4ade80" : error ? "#ef4444" : "#22d3ee" }} />
         </div>
       </div>
 

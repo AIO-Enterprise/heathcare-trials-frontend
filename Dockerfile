@@ -8,9 +8,9 @@ RUN npm ci || npm install
 
 COPY . .
 
-# VITE_API_URL is injected at build time via --build-arg
-ARG VITE_API_URL=/api
-ENV VITE_API_URL=$VITE_API_URL
+# VITE_BACKEND_URL (backend origin, no /api suffix) is injected at build time via --build-arg
+ARG VITE_BACKEND_URL
+ENV VITE_BACKEND_URL=$VITE_BACKEND_URL
 
 RUN npm run build
 

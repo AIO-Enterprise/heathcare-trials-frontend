@@ -25,10 +25,9 @@ export function AuthProvider({ children }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const token = localStorage.getItem("token");
     const stored = localStorage.getItem("user");
 
-    if (token && stored) {
+    if (stored) {
       try {
         setUser(JSON.parse(stored));
 
@@ -48,7 +47,7 @@ export function AuthProvider({ children }) {
             .catch(() => {});
         }
       } catch {
-        localStorage.clear();
+        localStorage.removeItem("user");
       }
     } else {
       // No active session — reset to platform default for the login page.
@@ -63,7 +62,7 @@ export function AuthProvider({ children }) {
   // when a refresh call fails (e.g. token revoked server-side).
   useEffect(() => {
     const handleExpired = () => {
-      localStorage.clear();
+      localStorage.removeItem("user");
       resetBrandTheme({ clearFlag: true });
       setUser(null);
     };
@@ -81,10 +80,8 @@ export function AuthProvider({ children }) {
       companyIndustry: data.company_industry || null,
       fullName: data.full_name || "",
       email: data.email || "",
-      token: data.access_token,
       onboarded: data.onboarded ?? false,
     };
-    localStorage.setItem("token", data.access_token);
     localStorage.setItem("user", JSON.stringify(userData));
     setUser(userData);
 
@@ -105,9 +102,10 @@ export function AuthProvider({ children }) {
   // Theme is applied by OnboardingPage directly (it already has the brand data),
   // so no brand fetch needed here.
   const hydrateUser = useCallback((userData) => {
-    localStorage.setItem("token", userData.token);
-    localStorage.setItem("user", JSON.stringify(userData));
-    setUser(userData);
+    const profile = { ...userData };
+    delete profile.token; // ponytail: Bearer-era leftover; remove when backend drops access_token
+    localStorage.setItem("user", JSON.stringify(profile));
+    setUser(profile);
   }, []);
 
   const updateFullName = useCallback((name) => {
@@ -132,8 +130,8 @@ export function AuthProvider({ children }) {
   }, []);
 
   const logout = useCallback(() => {
-    localStorage.clear();
-    // clearFlag=true removes the override so the next company starts fresh.
+    authAPI.logout().catch(() => {});
+    localStorage.removeItem("user");
     resetBrandTheme({ clearFlag: true });
     setUser(null);
   }, []);

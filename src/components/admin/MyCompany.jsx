@@ -11,6 +11,7 @@
 
 import React, { useState, useEffect, useRef } from "react";
 import { PageWithSidebar, SectionCard } from "../shared/Layout";
+import { useBlobUrl } from "../shared/useBlobUrl";
 import { documentsAPI, brandKitAPI, onboardingAPI, companyAPI } from "../../services/api";
 import { useAuth } from "../../contexts/AuthContext";
 import {
@@ -93,14 +94,15 @@ function previewMode(ext) {
 function PreviewModal({ doc, onClose }) {
   const ext = extFromPath(doc.file_path);
   const mode = previewMode(ext);
-  const url = documentsAPI.getFileUrl(doc.id);
+  const url = doc.file_url;
+  const pdfUrl = useBlobUrl(url, mode);
 
   const [textContent, setTextContent] = useState(null);
   const [textError, setTextError] = useState(false);
 
   useEffect(() => {
-    if (mode !== "text") return;
-    fetch(url)
+    if (mode !== "text" || !url) return;
+    fetch(url, { credentials: "include" })
       .then((r) => {
         if (!r.ok) throw new Error("fetch failed");
         return r.text();
@@ -247,9 +249,9 @@ function PreviewModal({ doc, onClose }) {
         {/* Modal body */}
         <div style={{ flex: 1, overflow: "hidden", position: "relative", minHeight: "600px" }}>
           {/* PDF */}
-          {mode === "pdf" && (
+          {mode === "pdf" && pdfUrl && (
             <iframe
-              src={url}
+              src={pdfUrl}
               title={doc.title}
               style={{
                 width: "100%",

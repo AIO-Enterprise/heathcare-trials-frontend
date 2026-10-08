@@ -612,14 +612,14 @@ export function PublishedCampaignPanel({ ad, onPreviewAd, onUpdateAd }) {
             <>
               <div className="flex gap-2" style={{ flexWrap: "wrap" }}>
                 <a
-                  href={adsAPI.websitePreviewUrl(ad.id)}
+                  href={ad.hosted_url || ad.output_url}
                   target="_blank"
                   rel="noreferrer"
                   className="btn--inline-action--success"
                 >
                   <Eye size={11} /> Preview
                 </a>
-                <a href={adsAPI.websiteDownloadUrl(ad.id)} className="btn--inline-action--ghost">
+                <a href={ad.website_download_url || ad.hosted_url || ad.output_url} className="btn--inline-action--ghost">
                   <Download size={11} /> Download HTML
                 </a>
                 <button

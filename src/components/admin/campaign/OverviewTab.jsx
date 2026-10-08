@@ -7,7 +7,6 @@ import {
   Globe,
 } from "lucide-react";
 import { SectionCard } from "../../shared/Layout";
-import { adsAPI } from "../../../services/api";
 import { VOICE_CATALOGUE } from "../VoicebotPanel";
 import { StatusTimeline, AdTypeChip, BudgetDonut } from "./StrategyViewer";
 import TrialLocationsCard from "./TrialLocationsCard";
@@ -610,7 +609,7 @@ export default function OverviewTab({
                     </div>
                     <div style={{ display: "flex", gap: "8px" }}>
                       <a
-                        href={adsAPI.websitePreviewUrl(id)}
+                        href={ad.hosted_url || ad.output_url}
                         target="_blank"
                         rel="noopener noreferrer"
                         style={{
@@ -630,7 +629,7 @@ export default function OverviewTab({
                         <Eye size={13} /> Preview
                       </a>
                       <a
-                        href={adsAPI.websiteDownloadUrl(id)}
+                        href={ad.website_download_url || ad.hosted_url || ad.output_url}
                         download="landing-page.html"
                         style={{
                           display: "inline-flex",

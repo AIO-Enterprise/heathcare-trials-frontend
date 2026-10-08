@@ -4,10 +4,6 @@
     "rewrite": "/index.html",
     "exclude": [
       "/assets/*",
-      "/api/*",
-      "/uploads/*",
-      "/outputs/*",
-      "/static/*",
       "*.{js,css,json,map,png,jpg,jpeg,gif,svg,ico,webp,woff,woff2,ttf,eot}"
     ]
   },

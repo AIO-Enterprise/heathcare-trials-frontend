@@ -1,0 +1,20 @@
+services:
+  frontend:
+    build:
+      context: .
+      target: builder
+    command: npm run dev -- --host
+    ports:
+      - "5173:5173"
+    volumes:
+      - .:/app
+      - frontend_node_modules:/app/node_modules
+    environment:
+      - VITE_BACKEND_URL=${VITE_BACKEND_URL:-http://host.docker.internal:8000}
+      # Override VITE_PROXY_TARGET if backend runs on a non-default host/port.
+      # On Docker Desktop (Windows/Mac) host.docker.internal reaches the host machine.
+      - VITE_PROXY_TARGET=${VITE_PROXY_TARGET:-http://host.docker.internal:8000}
+    restart: unless-stopped
+
+volumes:
+  frontend_node_modules:

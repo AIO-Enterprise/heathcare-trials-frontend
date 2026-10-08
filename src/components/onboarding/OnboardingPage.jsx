@@ -157,17 +157,13 @@ export default function OnboardingPage() {
         "super_user",
       );
 
-      // 3. Persist token immediately so subsequent API calls use it.
-      localStorage.setItem("token", loginRes.access_token);
-
-      // 4. Hydrate AuthContext.
+      // 3. Hydrate AuthContext (session cookie already set by the login response).
       hydrateUser({
         id: loginRes.user_id,
         role: loginRes.role,
         companyId: loginRes.company_id,
         companyName: loginRes.company_name,
         companyIndustry: form.industry || null,
-        token: loginRes.access_token,
         onboarded: false,
       });
 
