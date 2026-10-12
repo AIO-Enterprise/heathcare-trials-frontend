@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { SectionCard } from "../../shared/Layout";
-import { adsAPI } from "../../../services/api";
+import { adsAPI, resolveAssetUrl } from "../../../services/api";
 import { hasType, typeLabel } from "../publisherUtils";
 import {
   Image,
@@ -428,14 +428,14 @@ function CreativeShortsTabs({ ad, onPreviewAd }) {
               {c.image_url ? (
                 c.image_url.endsWith(".mp4") ? (
                   <video
-                    src={c.image_url}
+                    src={resolveAssetUrl(c.image_url)}
                     muted
                     playsInline
                     style={{ width: "100%", height: "100%", objectFit: "cover" }}
                   />
                 ) : (
                   <img
-                    src={c.image_url}
+                    src={resolveAssetUrl(c.image_url)}
                     alt={c.headline}
                     style={{ width: "100%", height: "100%", objectFit: "cover" }}
                   />
@@ -499,7 +499,7 @@ function CreativeShortsTabs({ ad, onPreviewAd }) {
             >
               {c.image_url ? (
                 <video
-                  src={c.image_url}
+                  src={resolveAssetUrl(c.image_url)}
                   muted
                   playsInline
                   style={{ width: "100%", height: "100%", objectFit: "cover" }}
@@ -1524,14 +1524,14 @@ export function DistributeForm({
                 {c.image_url ? (
                   c.image_url.endsWith(".mp4") ? (
                     <video
-                      src={c.image_url}
+                      src={resolveAssetUrl(c.image_url)}
                       muted
                       playsInline
                       style={{ width: "100%", height: "100%", objectFit: "cover" }}
                     />
                   ) : (
                     <img
-                      src={c.image_url}
+                      src={resolveAssetUrl(c.image_url)}
                       alt=""
                       style={{ width: "100%", height: "100%", objectFit: "cover" }}
                     />

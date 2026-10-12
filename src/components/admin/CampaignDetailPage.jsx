@@ -1072,6 +1072,7 @@ function CampaignDetailPageInner() {
         />
 
         {/* ══ OVERVIEW tab ══════════════════════════════════════════════════════ */}
+        {pageTab === "overview" && (
         <OverviewTab
           ad={ad}
           setAd={setAd}
@@ -1084,7 +1085,9 @@ function CampaignDetailPageInner() {
           setPageTab={setPageTab}
           setPreviewDoc={setPreviewDoc}
         />
+        )}
         {/* ══ STRATEGY tab ══════════════════════════════════════════════════════ */}
+        {pageTab === "strategy" && (
         <StrategyTab
           ad={ad}
           isStudyCoordinator={isStudyCoordinator}
@@ -1108,6 +1111,7 @@ function CampaignDetailPageInner() {
           revLoading={revLoading}
           revError={revError}
         />
+        )}
 
         {/* ══ QUESTIONNAIRE tab ═════════════════════════════════════════════════ */}
         {pageTab === "questionnaire" && (
@@ -1306,6 +1310,7 @@ function CampaignDetailPageInner() {
         )}
 
         {/* ══ PARTICIPANTS tab ══════════════════════════════════════════════════ */}
+        {pageTab === "participants" && (
         <ParticipantsTab
           ad={ad}
           id={id}
@@ -1323,8 +1328,10 @@ function CampaignDetailPageInner() {
           syncResult={syncResult}
           handleSyncTranscripts={handleSyncTranscripts}
         />
+        )}
 
         {/* ══ BOOKINGS tab ══════════════════════════════════════════════════════ */}
+        {pageTab === "bookings" && (
         <BookingsTab
           id={id}
           isStudyCoordinator={isStudyCoordinator}
@@ -1341,8 +1348,10 @@ function CampaignDetailPageInner() {
           bcSaving={bcSaving}
           setBcSaving={setBcSaving}
         />
+        )}
 
         {/* ══ PUBLISH tab ═══════════════════════════════════════════════════════ */}
+        {pageTab === "publish" && (
         <PublishTab
           ad={ad}
           id={id}
@@ -1364,6 +1373,7 @@ function CampaignDetailPageInner() {
           hostLoading={hostLoading}
           hostError={hostError}
         />
+        )}
 
         {/* ══ SMS tab ═══════════════════════════════════════════════════════════ */}
         {pageTab === "sms" && (

@@ -9,7 +9,7 @@
 
 import React, { useState, useEffect, useRef } from "react";
 import { SectionCard, CampaignStatusBadge } from "./Layout";
-import { adsAPI } from "../../services/api";
+import { adsAPI, resolveAssetUrl } from "../../services/api";
 import {
   Image,
   Globe,
@@ -155,7 +155,7 @@ function CreativesGrid({ creatives }) {
               {c.image_url ? (
                 c.image_url.endsWith(".mp4") ? (
                   <video
-                    src={c.image_url}
+                    src={resolveAssetUrl(c.image_url)}
                     autoPlay
                     loop
                     muted
@@ -170,7 +170,7 @@ function CreativesGrid({ creatives }) {
                   />
                 ) : (
                   <img
-                    src={c.image_url}
+                    src={resolveAssetUrl(c.image_url)}
                     alt={c.headline}
                     style={{
                       maxHeight: 220,
@@ -221,7 +221,7 @@ function CreativesGrid({ creatives }) {
               {/* View full size */}
               {c.image_url && (
                 <button
-                  onClick={() => setLightbox(c.image_url)}
+                  onClick={() => setLightbox(resolveAssetUrl(c.image_url))}
                   title="View full size"
                   style={{
                     position: "absolute",
@@ -286,7 +286,7 @@ function CreativesGrid({ creatives }) {
                 </span>
                 {c.image_url && (
                   <a
-                    href={c.image_url}
+                    href={resolveAssetUrl(c.image_url)}
                     download
                     style={{
                       display: "inline-flex",
@@ -336,7 +336,7 @@ function ShortVideoCard({ short, onExpand }) {
     >
       <video
         ref={videoRef}
-        src={short.image_url}
+        src={resolveAssetUrl(short.image_url)}
         autoPlay
         loop
         muted
@@ -504,7 +504,7 @@ function ShortsGrid({ shorts }) {
             }}
           >
             {/* Video — 9:16 portrait with mute toggle */}
-            <ShortVideoCard short={s} onExpand={() => setLightbox(s.image_url)} />
+            <ShortVideoCard short={s} onExpand={() => setLightbox(resolveAssetUrl(s.image_url))} />
 
             {/* Copy */}
             <div style={{ padding: "12px 14px", textAlign: "center" }}>
@@ -544,7 +544,7 @@ function ShortsGrid({ shorts }) {
                   {s.cta}
                 </span>
                 <a
-                  href={s.image_url}
+                  href={resolveAssetUrl(s.image_url)}
                   download
                   style={{
                     display: "inline-flex",
@@ -583,14 +583,15 @@ function WebsitePane({ ad }) {
     );
   }
 
-  // Landing-page endpoints are public — iframe/download use the backend-minted URLs verbatim.
-  const previewUrl = ad.hosted_url || ad.output_url;
+  // hosted_url is a backend API endpoint (works verbatim); output_url is a
+  // stored /outputs/... path that resolves through the auth-checked files route.
+  const previewUrl = ad.hosted_url || resolveAssetUrl(ad.output_url);
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
       <div style={{ display: "flex", justifyContent: "flex-end" }}>
         <a
-          href={ad.website_download_url || previewUrl}
+          href={resolveAssetUrl(ad.website_download_url) || previewUrl}
           style={{
             display: "inline-flex",
             alignItems: "center",

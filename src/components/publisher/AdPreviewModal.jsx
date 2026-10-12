@@ -1,5 +1,6 @@
 import React from "react";
 import { X, ImageOff } from "lucide-react";
+import { resolveAssetUrl } from "../../services/api";
 
 // ─── Ad Preview Modal ─────────────────────────────────────────────────────────
 export function aspectRatioForFormat(format = "") {
@@ -52,7 +53,7 @@ export default function AdPreviewModal({ ad, onClose }) {
                 {c.image_url ? (
                   c.image_url.endsWith(".mp4") ? (
                     <video
-                      src={c.image_url}
+                      src={resolveAssetUrl(c.image_url)}
                       controls
                       autoPlay
                       loop
@@ -69,7 +70,7 @@ export default function AdPreviewModal({ ad, onClose }) {
                     />
                   ) : (
                     <img
-                      src={c.image_url}
+                      src={resolveAssetUrl(c.image_url)}
                       alt={c.headline}
                       style={{
                         maxHeight: maxMediaHeight,

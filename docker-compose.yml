@@ -10,7 +10,11 @@ services:
       - .:/app
       - frontend_node_modules:/app/node_modules
     environment:
-      - VITE_BACKEND_URL=${VITE_BACKEND_URL:-http://host.docker.internal:8000}
+      # Empty in dev: the app calls same-origin "/api" and the Vite proxy
+      # forwards to the backend. An absolute URL here makes API calls
+      # cross-site, which silently drops the SameSite=Lax auth cookie and
+      # logs you out after every login. (Prod builds use .env.production.local.)
+      - VITE_BACKEND_URL=
       # Override VITE_PROXY_TARGET if backend runs on a non-default host/port.
       # On Docker Desktop (Windows/Mac) host.docker.internal reaches the host machine.
       - VITE_PROXY_TARGET=${VITE_PROXY_TARGET:-http://host.docker.internal:8000}

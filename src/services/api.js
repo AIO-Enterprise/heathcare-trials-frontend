@@ -6,7 +6,22 @@
  * All functions return parsed JSON or throw errors.
  */
 
-export const API_BASE = (import.meta.env.VITE_BACKEND_URL || "").replace(/\/$/, "") + "/api";
+// Empty VITE_BACKEND_URL → same-origin "/api" (Vite dev proxy forwards to the
+// backend). Same-origin is required for cookie auth: cross-site fetch
+// (e.g. localhost page → 127.0.0.1 API) silently drops SameSite=Lax cookies,
+// which logs you out on every refresh. Production builds set an absolute
+// VITE_BACKEND_URL and rely on cross-site cookie settings server-side.
+export const API_BASE = ((import.meta.env.VITE_BACKEND_URL || "").replace(/\/$/, "") || "") + "/api";
+
+// Stored asset paths ("/outputs/...", "/uploads/...") have no open mount —
+// the backend serves them only through the auth-checked GET /api/files/...
+// route (cookie travels same-origin). Absolute http(s) URLs pass through.
+export const resolveAssetUrl = (url) => {
+  if (!url) return url;
+  if (/^https?:\/\//i.test(url)) return url;
+  if (url.startsWith("/outputs/") || url.startsWith("/uploads/")) return `${API_BASE}/files${url}`;
+  return url;
+};
 
 // ─── Token refresh helpers ────────────────────────────────────────────────────
 // Session lives in an HttpOnly cookie; JS only reads the non-secret token_exp

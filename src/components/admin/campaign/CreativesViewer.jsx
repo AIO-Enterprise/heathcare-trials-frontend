@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import { Download, Eye, X as XIcon, Image } from "lucide-react";
+import { resolveAssetUrl } from "../../../services/api";
 
 // ─── Creatives Viewer ─────────────────────────────────────────────────────────
 export default function CreativesViewer({ creatives }) {
@@ -114,7 +115,7 @@ export default function CreativesViewer({ creatives }) {
               {c.image_url ? (
                 c.image_url.endsWith(".mp4") ? (
                   <video
-                    src={c.image_url}
+                    src={resolveAssetUrl(c.image_url)}
                     autoPlay
                     loop
                     muted
@@ -129,7 +130,7 @@ export default function CreativesViewer({ creatives }) {
                   />
                 ) : (
                   <img
-                    src={c.image_url}
+                    src={resolveAssetUrl(c.image_url)}
                     alt={c.headline}
                     style={{
                       maxHeight: "260px",
@@ -180,7 +181,7 @@ export default function CreativesViewer({ creatives }) {
               {/* View full size button */}
               {c.image_url && (
                 <button
-                  onClick={(e) => openPopover(e, c.image_url)}
+                  onClick={(e) => openPopover(e, resolveAssetUrl(c.image_url))}
                   style={{
                     position: "absolute",
                     top: "8px",
@@ -250,7 +251,7 @@ export default function CreativesViewer({ creatives }) {
                 </span>
                 {c.image_url && (
                   <a
-                    href={c.image_url}
+                    href={resolveAssetUrl(c.image_url)}
                     download
                     style={{
                       display: "inline-flex",
