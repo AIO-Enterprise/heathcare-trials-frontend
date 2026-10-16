@@ -79,6 +79,12 @@ function nameFromPath(filePath) {
   return filePath.split("/").pop();
 }
 
+function displayNameFromPath(filePath) {
+  const name = nameFromPath(filePath);
+  if (!name) return null;
+  return name.replace(/^[a-f0-9]{8,}[_-]/i, "");
+}
+
 // Returns the preview mode for a given file extension.
 // "pdf"      — render with <iframe>
 // "text"     — fetch and render in <pre>
@@ -1911,7 +1917,7 @@ export default function MyCompany() {
         {docs.map((doc) => {
           const typeInfo = DOC_TYPES.find((t) => t.value === doc.doc_type);
           const ext = extFromPath(doc.file_path);
-          const fileName = nameFromPath(doc.file_path);
+          const fileName = displayNameFromPath(doc.file_path);
           const hasFile = !!doc.file_path;
 
           return (
