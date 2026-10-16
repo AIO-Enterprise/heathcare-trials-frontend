@@ -1212,7 +1212,7 @@ function BrandKitPanel() {
   const { user, companyIndustry } = useAuth();
 
   const handleUseDefault = () => {
-    resetBrandTheme();
+    resetBrandTheme({ preserveCache: true });
     setUsingDefault(true);
   };
 
@@ -1229,6 +1229,7 @@ function BrandKitPanel() {
       .get()
       .then((bk) => {
         setBrandKit(bk);
+        setUsingDefault(isDefaultThemeOverrideActive());
         setBrand({
           primaryColor: bk.primary_color || null,
           secondaryColor: bk.secondary_color || null,
@@ -1391,6 +1392,10 @@ function BrandKitPanel() {
             <p className="page-card__subtitle">
               {selectedPreset
                 ? `Active: ${selectedPreset}`
+                : brandKit?.primary_color || brandKit?.accent_color || brandKit?.primary_font
+                  ? usingDefault
+                    ? "Saved brand kit — platform default currently active"
+                    : "Saved brand kit is active"
                 : "Colors, fonts and tone for your company"}
             </p>
           </div>

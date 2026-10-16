@@ -13,6 +13,9 @@ import { SectionCard } from "../../shared/Layout";
 import ActionButton from "./ActionButton";
 import AdPreviewTabs from "./AdPreviewTabs";
 import { InlineProgress } from "./GenerateProgress";
+
+const hasWebsiteAsset = (ad) => Boolean(ad?.hosted_url || ad?.output_url || ad?.website_download_url);
+
 export default function PublishTab({
   ad,
   id,
@@ -104,7 +107,7 @@ export default function PublishTab({
 
             {/* Generate Website */}
             {ad.ad_type?.includes("website") &&
-              (canRegenerate ? ad.status !== "draft" : !!ad.output_url) && (
+              (canRegenerate ? ad.status !== "draft" : hasWebsiteAsset(ad)) && (
                 <SectionCard
                   title="Landing Page"
                   subtitle="Brand-styled HTML page generated from your strategy and website requirements"
@@ -137,7 +140,7 @@ export default function PublishTab({
                         display: "flex",
                         alignItems: "center",
                         gap: "12px",
-                        marginBottom: ad.output_url ? "20px" : 0,
+                        marginBottom: hasWebsiteAsset(ad) ? "20px" : 0,
                       }}
                     >
                       <ActionButton
@@ -147,14 +150,14 @@ export default function PublishTab({
                       >
                         {websiteLoading
                           ? "Generating…"
-                          : ad.output_url
+                          : hasWebsiteAsset(ad)
                             ? "Regenerate Website"
                             : "Generate Website"}
                       </ActionButton>
                       {websiteLoading ? (
                         <InlineProgress progress={genProgress.progress} />
                       ) : (
-                        !ad.output_url && (
+                        !hasWebsiteAsset(ad) && (
                           <p style={{ fontSize: "0.78rem", color: "var(--color-sidebar-text)" }}>
                             Generates a self-contained HTML page · uses brand kit + strategy
                           </p>
@@ -162,7 +165,7 @@ export default function PublishTab({
                       )}
                     </div>
                   )}
-                  {ad.output_url && (
+                  {hasWebsiteAsset(ad) && (
                     <>
                       <div
                         style={{
@@ -417,7 +420,7 @@ export default function PublishTab({
             {isStudyCoordinator &&
               ad.status !== "draft" &&
               !ad.output_files?.length &&
-              !ad.output_url && (
+               !hasWebsiteAsset(ad) && (
                 <div style={{ textAlign: "center", padding: "48px 0" }}>
                   <Eye
                     size={32}

@@ -24,6 +24,12 @@ import {
   VolumeX,
 } from "lucide-react";
 
+const getWebsitePreviewUrl = (ad) => ad?.hosted_url || resolveAssetUrl(ad?.output_url) || null;
+
+const getWebsiteDownloadUrl = (ad) => resolveAssetUrl(ad?.website_download_url) || getWebsitePreviewUrl(ad);
+
+const hasWebsiteAsset = (ad) => Boolean(getWebsitePreviewUrl(ad) || getWebsiteDownloadUrl(ad));
+
 // ─── Creative card grid ───────────────────────────────────────────────────────
 
 function CreativesGrid({ creatives }) {
@@ -569,7 +575,10 @@ function ShortsGrid({ shorts }) {
 // ─── Website preview pane ─────────────────────────────────────────────────────
 
 function WebsitePane({ ad }) {
-  if (!ad.output_url) {
+  const previewUrl = getWebsitePreviewUrl(ad);
+  const downloadUrl = getWebsiteDownloadUrl(ad);
+
+  if (!previewUrl) {
     return (
       <div
         style={{ textAlign: "center", padding: "48px 20px", color: "var(--color-sidebar-text)" }}
@@ -583,15 +592,11 @@ function WebsitePane({ ad }) {
     );
   }
 
-  // hosted_url is a backend API endpoint (works verbatim); output_url is a
-  // stored /outputs/... path that resolves through the auth-checked files route.
-  const previewUrl = ad.hosted_url || resolveAssetUrl(ad.output_url);
-
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
       <div style={{ display: "flex", justifyContent: "flex-end" }}>
         <a
-          href={resolveAssetUrl(ad.website_download_url) || previewUrl}
+          href={downloadUrl}
           style={{
             display: "inline-flex",
             alignItems: "center",
@@ -711,7 +716,7 @@ export default function PreviewPanel({ ads }) {
             previewable.map((ad) => {
               const isActive = currentAd?.id === ad.id;
               const creativeCount = ad.output_files?.length ?? 0;
-              const hasWebsite = !!ad.output_url;
+              const hasWebsite = hasWebsiteAsset(ad);
               return (
                 <button
                   key={ad.id}
@@ -894,7 +899,7 @@ export default function PreviewPanel({ ads }) {
               className={previewTab === "website" ? "filter-tab--active" : "filter-tab"}
             >
               Website
-              {currentAd.output_url && (
+              {hasWebsiteAsset(currentAd) && (
                 <span
                   style={{
                     marginLeft: 6,
@@ -998,7 +1003,7 @@ export default function PreviewPanel({ ads }) {
                   )}
                   {regenState === "website"
                     ? "Generating website…"
-                    : currentAd.output_url
+                    : hasWebsiteAsset(currentAd)
                       ? "Regenerate Website"
                       : "Generate Website"}
                 </button>

@@ -517,13 +517,13 @@ function CampaignDetailPageInner() {
     setWebsiteError(null);
     genProgress.start("Building landing page…", 120000);
     try {
-      const prevUrl = ad?.output_url;
+      const prevUrl = ad?.hosted_url || ad?.output_url || ad?.website_download_url;
       const triggered = await adsAPI.generateWebsite(id);
       // Backend returns immediately; poll until the background task commits.
       // Website gen is slower than creatives (Claude + image + EFS write) → 10 min.
       const updated = await pollUntilUpdated(id, triggered.updated_at, 600_000);
       // Detect silent failure: task touched updated_at but didn't produce a URL
-      if (!updated.output_url && !prevUrl) {
+      if (!updated.hosted_url && !updated.output_url && !updated.website_download_url && !prevUrl) {
         throw new Error(
           "Website generation failed on the server. Check the backend logs for the error.",
         );
@@ -1141,143 +1141,6 @@ function CampaignDetailPageInner() {
               showAI={isStudyCoordinator}
               onSaved={load}
             />
-          </div>
-        )}
-
-        {/* ══ REVIEW tab ════════════════════════════════════════════════════════ */}
-        {pageTab === "review" && (
-          <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
-            {canReview && (
-              <SectionCard title="Submit Review">
-                <ReviewPanel adId={id} onSubmitted={handleReviewSubmitted} />
-              </SectionCard>
-            )}
-
-            {(ad.website_reqs || ad.ad_details) && (
-              <SectionCard
-                title="Reviewer Output"
-                subtitle="Structured requirements extracted by the Reviewer AI"
-              >
-                <div style={{ display: "flex", flexDirection: "column", gap: "24px" }}>
-                  {ad.website_reqs && (
-                    <div>
-                      <p
-                        style={{
-                          fontSize: "0.72rem",
-                          fontWeight: 700,
-                          textTransform: "uppercase",
-                          letterSpacing: "0.06em",
-                          color: "var(--color-accent)",
-                          marginBottom: "12px",
-                          display: "flex",
-                          alignItems: "center",
-                          gap: "6px",
-                        }}
-                      >
-                        <Globe size={12} /> Website Requirements
-                      </p>
-                      <div
-                        style={{
-                          display: "grid",
-                          gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))",
-                          gap: "10px",
-                        }}
-                      >
-                        {Object.entries(ad.website_reqs).map(([key, val]) => (
-                          <div
-                            key={key}
-                            style={{
-                              padding: "12px 14px",
-                              borderRadius: "10px",
-                              border: "1px solid var(--color-card-border)",
-                              backgroundColor: "var(--color-card-bg)",
-                            }}
-                          >
-                            <p
-                              style={{
-                                fontSize: "0.72rem",
-                                fontWeight: 600,
-                                textTransform: "capitalize",
-                                color: "var(--color-sidebar-text)",
-                                marginBottom: "6px",
-                              }}
-                            >
-                              {key.replace(/_/g, " ")}
-                            </p>
-                            <GenericValue value={val} />
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-                  {ad.ad_details && (
-                    <div>
-                      <p
-                        style={{
-                          fontSize: "0.72rem",
-                          fontWeight: 700,
-                          textTransform: "uppercase",
-                          letterSpacing: "0.06em",
-                          color: "var(--color-accent)",
-                          marginBottom: "12px",
-                          display: "flex",
-                          alignItems: "center",
-                          gap: "6px",
-                        }}
-                      >
-                        <Layers size={12} /> Ad Specifications
-                      </p>
-                      <div
-                        style={{
-                          display: "grid",
-                          gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))",
-                          gap: "10px",
-                        }}
-                      >
-                        {Object.entries(ad.ad_details).map(([key, val]) => (
-                          <div
-                            key={key}
-                            style={{
-                              padding: "12px 14px",
-                              borderRadius: "10px",
-                              border: "1px solid var(--color-card-border)",
-                              backgroundColor: "var(--color-card-bg)",
-                            }}
-                          >
-                            <p
-                              style={{
-                                fontSize: "0.72rem",
-                                fontWeight: 600,
-                                textTransform: "capitalize",
-                                color: "var(--color-sidebar-text)",
-                                marginBottom: "6px",
-                              }}
-                            >
-                              {key.replace(/_/g, " ")}
-                            </p>
-                            <GenericValue value={val} />
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-                </div>
-              </SectionCard>
-            )}
-
-            {!canReview && !(ad.website_reqs || ad.ad_details) && (
-              <div style={{ textAlign: "center", padding: "48px 0" }}>
-                <ClipboardCheck
-                  size={32}
-                  style={{ color: "var(--color-card-border)", margin: "0 auto 12px" }}
-                />
-                <p style={{ color: "var(--color-sidebar-text)", fontSize: "0.9rem" }}>
-                  Campaign is{" "}
-                  <strong style={{ color: "var(--color-input-text)" }}>{ad.status}</strong> — no
-                  review activity yet.
-                </p>
-              </div>
-            )}
           </div>
         )}
 

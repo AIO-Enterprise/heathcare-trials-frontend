@@ -49,6 +49,7 @@ import QuestionnaireViewer from "./review/QuestionnaireViewer";
 import DocPreviewModal from "./review/DocPreviewModal";
 import ReviewCard from "./review/ReviewCard";
 import { BudgetDonut } from "./review/charts";
+import RecreatePanel from "./review/RecreatePanel";
 function needsQuestionnaire(ad) {
   return !!ad;
 }
@@ -73,6 +74,26 @@ export default function ReviewerCampaignDetail() {
   const [selectedParticipant, setSelectedParticipant] = useState(null);
   const [syncingTranscripts, setSyncingTranscripts] = useState(false);
   const [syncResult, setSyncResult] = useState(null);
+  const [backgroundJob, setBackgroundJob] = useState(null);
+
+  useEffect(() => {
+    if (!ad) return;
+
+    if (ad.status === "optimizing" || ad.status === "generating") {
+      setBackgroundJob((current) =>
+        current?.state === "error"
+          ? current
+          : current || { label: "Campaign update in progress…", state: "running" }
+      );
+      return;
+    }
+
+    setBackgroundJob((current) => {
+      if (!current) return null;
+      if (current.state === "running") return { label: current.label, state: "done" };
+      return current;
+    });
+  }, [ad]);
 
   const load = useCallback(async () => {
     try {
@@ -107,6 +128,50 @@ export default function ReviewerCampaignDetail() {
 
   const handleActionDone = async () => {
     await load();
+  };
+
+  const startBackgroundPoll = (beforeAt, label) => {
+    setBackgroundJob({ label, state: "running" });
+    const deadline = Date.now() + 180000;
+
+    (async () => {
+      try {
+        while (Date.now() < deadline) {
+          await new Promise((r) => setTimeout(r, 4000));
+          const latest = await adsAPI.get(id);
+          const processing = latest.status === "optimizing" || latest.status === "generating";
+          if (latest.updated_at !== beforeAt && !processing) {
+            setAd(latest);
+            const reviewsData = await adsAPI.listReviews(id);
+            setReviews(reviewsData);
+            setBackgroundJob({ label, state: "done" });
+            return;
+          }
+        }
+        setBackgroundJob({ label, state: "error", message: "Timed out waiting for update. Please refresh." });
+      } catch (err) {
+        setBackgroundJob({
+          label,
+          state: "error",
+          message: err.message || "Background update failed. Please refresh.",
+        });
+      }
+    })();
+  };
+
+  const handleRecreateStrategy = async (instructions) => {
+    const triggered = await adsAPI.rewriteStrategy(id, { instructions });
+    startBackgroundPoll(triggered.updated_at, "Strategy re-create in progress…");
+  };
+
+  const handleRecreateCreatives = async (instructions) => {
+    const triggered = await adsAPI.rewriteCreatives(id, { instructions });
+    startBackgroundPoll(triggered.updated_at, "Creative re-create in progress…");
+  };
+
+  const handleRecreateQuestionnaire = async (instructions) => {
+    const triggered = await adsAPI.rewriteQuestionnaire(id, { instructions });
+    startBackgroundPoll(triggered.updated_at, "Questionnaire re-create in progress…");
   };
 
   const handleSyncTranscripts = async () => {
@@ -194,6 +259,51 @@ export default function ReviewerCampaignDetail() {
         </button>
 
         {/* ── Hero card ── */}
+        {backgroundJob && (
+          <div
+            style={{
+              marginBottom: 16,
+              padding: "12px 14px",
+              borderRadius: 10,
+              border:
+                backgroundJob.state === "error"
+                  ? "1px solid rgba(239,68,68,0.25)"
+                  : "1px solid rgba(59,130,246,0.2)",
+              background:
+                backgroundJob.state === "error"
+                  ? "rgba(239,68,68,0.06)"
+                  : backgroundJob.state === "done"
+                    ? "rgba(34,197,94,0.08)"
+                    : "rgba(59,130,246,0.06)",
+            }}
+          >
+            <p
+              style={{
+                fontSize: "0.84rem",
+                fontWeight: 600,
+                color:
+                  backgroundJob.state === "error"
+                    ? "#ef4444"
+                    : backgroundJob.state === "done"
+                      ? "#16a34a"
+                      : "var(--color-input-text)",
+                margin: 0,
+              }}
+            >
+              {backgroundJob.state === "done"
+                ? "Update finished."
+                : backgroundJob.state === "error"
+                  ? backgroundJob.message
+                  : backgroundJob.label}
+            </p>
+            {backgroundJob.state === "running" && (
+              <p style={{ fontSize: "0.76rem", color: "var(--color-sidebar-text)", margin: "4px 0 0" }}>
+                You can keep working on other tabs and pages while this runs.
+              </p>
+            )}
+          </div>
+        )}
+
         <div
           style={{
             borderRadius: 16,
@@ -535,12 +645,61 @@ export default function ReviewerCampaignDetail() {
                 />
               </div>
             )}
+
+            <SectionCard
+              title={role === "ethics_manager" ? "Ethics Workflow" : "Review Workflow"}
+              subtitle={
+                role === "ethics_manager"
+                  ? "Make changes only if needed, then accept or reject the campaign."
+                  : "Make changes only if needed, then accept or reject before ethics review."
+              }
+            >
+              {!canAct ? (
+                <div style={{ textAlign: "center", padding: "12px 0 4px" }}>
+                  <ClipboardCheck
+                    size={28}
+                    style={{ color: "var(--color-card-border)", margin: "0 auto 12px" }}
+                  />
+                  <p style={{ color: "var(--color-sidebar-text)", fontSize: "0.9rem" }}>
+                    Campaign is <strong style={{ color: "var(--color-input-text)" }}>{ad.status}</strong>
+                    {" "}— no action required right now.
+                  </p>
+                </div>
+              ) : (
+                <div style={{ maxWidth: 720 }}>
+                  <ActionTabs active={actionTab} onChange={setActionTab} />
+
+                  {actionTab === "verdict" && (
+                    <VerdictPanel
+                      adId={id}
+                      stage={role === "ethics_manager" ? "ethics" : "strategy"}
+                      onSubmitted={handleActionDone}
+                    />
+                  )}
+                  {actionTab === "restrategy" &&
+                    (hasStrategy ? (
+                      <AIReStrategyPanel adId={id} onRewritten={handleActionDone} />
+                    ) : (
+                      <p style={{ fontSize: "0.85rem", color: "var(--color-sidebar-text)" }}>
+                        Strategy must be generated before triggering a re-write.
+                      </p>
+                    ))}
+                </div>
+              )}
+            </SectionCard>
           </div>
         )}
 
         {/* STRATEGY */}
         {pageTab === "strategy" && (
           <div>
+            {canAct && (
+              <RecreatePanel
+                label="Strategy review instruction"
+                placeholder="Describe exactly what should change in the strategy..."
+                onRun={handleRecreateStrategy}
+              />
+            )}
             {hasStrategy ? (
               <EditableStrategyViewer
                 strategy={ad.strategy_json}
@@ -564,6 +723,13 @@ export default function ReviewerCampaignDetail() {
         {/* CREATIVES */}
         {pageTab === "creatives" && (
           <div>
+            {canAct && (
+              <RecreatePanel
+                label="Creative review instruction"
+                placeholder="Describe exactly what should change in the creatives..."
+                onRun={handleRecreateCreatives}
+              />
+            )}
             {ad.output_files?.length ? (
               <CreativesViewer creatives={ad.output_files} />
             ) : (
@@ -600,47 +766,19 @@ export default function ReviewerCampaignDetail() {
                   : "No questions yet — generate to get started"}
               </p>
             </div>
+            {canAct && (
+              <RecreatePanel
+                label="Questionnaire review instruction"
+                placeholder="Describe exactly what should change in the questionnaire..."
+                onRun={handleRecreateQuestionnaire}
+              />
+            )}
             <QuestionnaireViewer
               questionnaire={ad.questionnaire}
               adId={id}
               onGenerated={handleActionDone}
               role={role}
             />
-          </div>
-        )}
-
-        {/* REVIEW */}
-        {pageTab === "review" && (
-          <div>
-            {!canAct ? (
-              <div style={{ textAlign: "center", padding: "48px 0" }}>
-                <ClipboardCheck
-                  size={32}
-                  style={{ color: "var(--color-card-border)", margin: "0 auto 12px" }}
-                />
-                <p style={{ color: "var(--color-sidebar-text)", fontSize: "0.9rem" }}>
-                  Campaign is{" "}
-                  <strong style={{ color: "var(--color-input-text)" }}>{ad.status}</strong> — no
-                  action required right now.
-                </p>
-              </div>
-            ) : (
-              <div style={{ maxWidth: 640 }}>
-                <ActionTabs active={actionTab} onChange={setActionTab} />
-
-                {actionTab === "verdict" && (
-                  <VerdictPanel adId={id} onSubmitted={handleActionDone} />
-                )}
-                {actionTab === "restrategy" &&
-                  (hasStrategy ? (
-                    <AIReStrategyPanel adId={id} onRewritten={handleActionDone} />
-                  ) : (
-                    <p style={{ fontSize: "0.85rem", color: "var(--color-sidebar-text)" }}>
-                      Strategy must be generated before triggering a re-write.
-                    </p>
-                  ))}
-              </div>
-            )}
           </div>
         )}
 

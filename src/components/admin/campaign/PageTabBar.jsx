@@ -4,7 +4,6 @@ import {
   Layers,
   ClipboardList,
   Users,
-  ClipboardCheck,
   History,
   Zap,
   CalendarDays,
@@ -19,7 +18,6 @@ export const PAGE_TABS = [
   { key: "participants", label: "Participants", icon: Users, alwaysShow: true },
   { key: "bookings", label: "Bookings", icon: CalendarDays, alwaysShow: true },
   { key: "sms", label: "SMS", icon: MessageSquare, alwaysShow: true },
-  { key: "review", label: "Review", icon: ClipboardCheck, alwaysShow: true },
   { key: "history", label: "History", icon: History, alwaysShow: true },
   { key: "publish", label: "Publish", icon: Zap, alwaysShow: true },
 ];

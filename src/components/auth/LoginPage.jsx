@@ -7,10 +7,11 @@
  * Styles: use classes from index.css only — no raw Tailwind color utilities.
  */
 
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { useAuth } from "../../contexts/AuthContext";
 import { LogIn } from "lucide-react";
+import { resetBrandTheme } from "../../services/theme";
 
 const ROLE_ROUTES = {
   super_user: "/study-coordinator",
@@ -29,6 +30,10 @@ export default function LoginPage() {
   const [role, setRole] = useState("study_coordinator");
   const { login } = useAuth();
   const navigate = useNavigate();
+
+  useEffect(() => {
+    resetBrandTheme({ clearFlag: true });
+  }, []);
 
   const handleSubmit = async (e) => {
     e.preventDefault();

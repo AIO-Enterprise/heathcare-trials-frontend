@@ -20,6 +20,8 @@ import {
   ChevronRight,
 } from "lucide-react";
 
+const hasWebsiteAsset = (ad) => Boolean(ad?.hosted_url || ad?.output_url || ad?.website_download_url);
+
 // ─── Deployment checklist helper ─────────────────────────────────────────────
 export function getDeployChecklist(ad) {
   const isAds = hasType(ad, "ads");
@@ -58,9 +60,9 @@ export function getDeployChecklist(ad) {
     items.push({
       key: "website_generated",
       label: "Website generated",
-      done: !!ad.output_url,
-      detail: ad.output_url ? "Landing page is ready" : "Not yet generated",
-      note: !ad.output_url ? "Ask your Study Coordinator to generate the campaign website." : null,
+      done: hasWebsiteAsset(ad),
+      detail: hasWebsiteAsset(ad) ? "Landing page is ready" : "Not yet generated",
+      note: !hasWebsiteAsset(ad) ? "Ask your Study Coordinator to generate the campaign website." : null,
       action: null,
     });
     items.push({
@@ -70,7 +72,7 @@ export function getDeployChecklist(ad) {
       detail: ad.hosted_url || "Needs to be hosted so Meta can link to it",
       note: null,
       action: !ad.hosted_url
-        ? ad.output_url
+        ? hasWebsiteAsset(ad)
           ? { type: "host", label: "Host Page" }
           : { type: "disabled", label: "Generate website first" }
         : null,
@@ -608,7 +610,7 @@ export function PublishedCampaignPanel({ ad, onPreviewAd, onUpdateAd }) {
       {isWebsite && (
         <div className="mb-4">
           <p className="pub-campaign-detail__section-label">Landing Page</p>
-          {ad.output_url ? (
+          {hasWebsiteAsset(ad) ? (
             <>
               <div className="flex gap-2" style={{ flexWrap: "wrap" }}>
                 <a

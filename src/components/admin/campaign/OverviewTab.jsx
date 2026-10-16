@@ -11,6 +11,9 @@ import { VOICE_CATALOGUE } from "../VoicebotPanel";
 import { StatusTimeline, AdTypeChip, BudgetDonut } from "./StrategyViewer";
 import TrialLocationsCard from "./TrialLocationsCard";
 import AdPreviewTabs from "./AdPreviewTabs";
+
+const hasWebsiteAsset = (ad) => Boolean(ad?.hosted_url || ad?.output_url || ad?.website_download_url);
+
 export default function OverviewTab({
   ad,
   setAd,
@@ -566,12 +569,12 @@ export default function OverviewTab({
             )}
 
             {/* Generated Assets preview — shown to all roles whenever content exists */}
-            {(ad.output_url || ad.output_files?.length > 0) && (
+            {(hasWebsiteAsset(ad) || ad.output_files?.length > 0) && (
               <SectionCard
                 title="Generated Assets"
                 subtitle="Preview content produced for this campaign"
               >
-                {ad.output_url && (
+                {hasWebsiteAsset(ad) && (
                   <div
                     style={{
                       display: "flex",

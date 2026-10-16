@@ -13,6 +13,105 @@
 // VITE_BACKEND_URL and rely on cross-site cookie settings server-side.
 export const API_BASE = ((import.meta.env.VITE_BACKEND_URL || "").replace(/\/$/, "") || "") + "/api";
 
+function toUserMessage(detail, status) {
+  const text = String(detail || "").trim();
+  if (!text) return `Request failed${status ? ` (${status})` : ""}. Please try again.`;
+
+  const lower = text.toLowerCase();
+
+  if (lower.includes("invalid credentials")) {
+    return "The email, password, company, or role you entered is incorrect.";
+  }
+  if (lower.includes("account is deactivated")) {
+    return "This account is inactive. Please contact your administrator.";
+  }
+  if (lower.includes("advertisement not found") || lower.includes("campaign not found")) {
+    return "We couldn't find that campaign. It may have been removed or you may not have access to it.";
+  }
+  if (lower.includes("company not found")) {
+    return "We couldn't find that company. Please check the company name and try again.";
+  }
+  if (lower.includes("brand kit not found")) {
+    return "No brand settings have been set up for this company yet.";
+  }
+  if (lower.includes("strategy review approval requires") || lower.includes("ethics review approval requires")) {
+    return "This campaign is no longer in the right review stage for that action. Please refresh and try again.";
+  }
+  if (lower.includes("revision/rejection requires")) {
+    return "This campaign can't be sent back for changes from its current stage. Please refresh and try again.";
+  }
+  if (lower.includes("can only be submitted for review")) {
+    return "This campaign isn't ready to be sent for review yet.";
+  }
+  if (lower.includes("can only be generated after strategy creation")) {
+    return "Please create the strategy first, then try again.";
+  }
+  if (lower.includes("can only be rewritten from") || lower.includes("cannot be recreated from the current status")) {
+    return "This item can't be updated right now because the campaign is in a different stage. Please refresh and try again.";
+  }
+  if (lower.includes("must be approved before publishing")) {
+    return "This campaign needs final approval before it can be published.";
+  }
+  if (lower.includes("ethics review must be completed and approved before publishing")) {
+    return "This campaign must pass ethics review before it can be published.";
+  }
+  if (lower.includes("generate ad creatives first before generating shorts")) {
+    return "Please generate ad creatives first, then create the short video version.";
+  }
+  if (lower.includes("no ad images found")) {
+    return "No generated ad images are available yet. Please recreate the creatives and try again.";
+  }
+  if (lower.includes("landing page has not been generated yet") || lower.includes("no website has been generated")) {
+    return "The landing page isn't ready yet. Please generate it first.";
+  }
+  if (lower.includes("questionnaire generation failed")) {
+    return "We couldn't generate the questionnaire right now. Please try again.";
+  }
+  if (lower.includes("analysis failed")) {
+    return "We couldn't complete that analysis right now. Please try again.";
+  }
+  if (lower.includes("invalid file type")) {
+    return text;
+  }
+  if (lower.includes("file too large")) {
+    return text;
+  }
+  if (lower.includes("meta api error") || lower.includes("google ads publish failed") || lower.includes("meta publish failed")) {
+    return "The ad platform couldn't complete that request right now. Please try again in a moment.";
+  }
+  if (lower.includes("elevenlabs error") || lower.includes("sync failed")) {
+    return "The voice service couldn't complete that request right now. Please try again.";
+  }
+  if (lower.includes("forbidden") || lower.includes("access denied")) {
+    return "You don't have permission to do that.";
+  }
+
+  return text;
+}
+
+function clearFrontendSessionState() {
+  localStorage.removeItem("user");
+  localStorage.removeItem("brand_kit_cache");
+  localStorage.removeItem("theme_override");
+
+  const root = document.documentElement;
+  [
+    "--color-accent",
+    "--color-accent-hover",
+    "--color-accent-subtle",
+    "--color-accent-text",
+    "--color-sidebar-text-active",
+    "--color-accent-r",
+    "--color-accent-g",
+    "--color-accent-b",
+    "--color-sidebar-bg",
+    "--color-sidebar-border",
+    "--color-btn-primary-bg",
+    "--color-btn-primary-hover",
+    "--font-sans",
+  ].forEach((prop) => root.style.removeProperty(prop));
+}
+
 // Stored asset paths ("/outputs/...", "/uploads/...") have no open mount —
 // the backend serves them only through the auth-checked GET /api/files/...
 // route (cookie travels same-origin). Absolute http(s) URLs pass through.
@@ -45,7 +144,7 @@ async function _refreshToken() {
     });
     if (!res.ok) {
       // Refresh failed — clear session and redirect to login
-      localStorage.removeItem("user");
+      clearFrontendSessionState();
       window.dispatchEvent(new CustomEvent("auth:expired"));
       throw new Error("Session expired");
     }
@@ -106,7 +205,7 @@ async function request(endpoint, options = {}) {
       });
       if (!retryRes.ok) {
         const err = await retryRes.json().catch(() => ({ detail: retryRes.statusText }));
-        throw new Error(err.detail || `HTTP ${retryRes.status}: ${retryRes.statusText}`);
+        throw new Error(toUserMessage(err.detail || err.message, retryRes.status));
       }
       if (retryRes.status === 204 || retryRes.headers.get("content-length") === "0") return null;
       return retryRes.json();
@@ -120,7 +219,7 @@ async function request(endpoint, options = {}) {
     // Skip for /auth/login itself: a 401 there means wrong credentials,
     // not an expired session — let the error bubble to the login form.
     if (res.status === 401 && endpoint !== "/auth/login") {
-      localStorage.removeItem("user");
+      clearFrontendSessionState();
       window.location.href = "/login";
       return;
     }
@@ -134,7 +233,7 @@ async function request(endpoint, options = {}) {
         })
         .join("\n");
     } else {
-      message = err.detail || err.message || `HTTP ${res.status}: ${res.statusText}`;
+      message = toUserMessage(err.detail || err.message || res.statusText, res.status);
     }
     throw new Error(message);
   }
@@ -663,6 +762,18 @@ export const adsAPI = {
 
   rewriteStrategy: (adId, data) =>
     request(`/advertisements/${adId}/rewrite-strategy`, {
+      method: "POST",
+      body: JSON.stringify(data),
+    }),
+
+  rewriteCreatives: (adId, data) =>
+    request(`/advertisements/${adId}/rewrite-creatives`, {
+      method: "POST",
+      body: JSON.stringify(data),
+    }),
+
+  rewriteQuestionnaire: (adId, data) =>
+    request(`/advertisements/${adId}/rewrite-questionnaire`, {
       method: "POST",
       body: JSON.stringify(data),
     }),

@@ -630,6 +630,30 @@ export function extractNumber(str) {
   return n;
 }
 
+export function formatKpiTarget(target) {
+  if (!target) return target;
+  const raw = String(target).trim();
+  const compact = raw.replace(/\s+/g, " ");
+  return compact
+    .replace(/\bat\s*least\b/gi, ">=")
+    .replace(/\bminimum\b/gi, ">=")
+    .replace(/\bmin\.?\b/gi, ">=")
+    .replace(/\bmore\s+than\b/gi, ">")
+    .replace(/\bover\b/gi, ">")
+    .replace(/\bless\s+than\b/gi, "<")
+    .replace(/\bunder\b/gi, "<")
+    .replace(/\bat\s*most\b/gi, "<=")
+    .replace(/\bmaximum\b/gi, "<=")
+    .replace(/\bmax\.?\b/gi, "<=")
+    .replace(/\s+,\s+/g, " · ");
+}
+
+function parsePercentLike(val) {
+  const n = parseFloat(String(val).replace(/[^0-9.\-]/g, ""));
+  if (!Number.isFinite(n)) return 0;
+  return n <= 1 ? n * 100 : n;
+}
+
 // ─── KPI chart (horizontal bars — PDF-style) ─────────────────────────────────
 export function QuantKpiChart({ kpis }) {
   const [mounted, setMounted] = useState(false);
@@ -645,7 +669,7 @@ export function QuantKpiChart({ kpis }) {
   const maxVal = Math.max(...nums, 1);
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+    <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
       {normalized.map((k, i) => {
         const color = detectKpiCategory(k.metric) ?? DONUT_PALETTE[i % DONUT_PALETTE.length];
         const pct = nums[i] === 0 ? 12 : Math.max(12, (nums[i] / maxVal) * 100);
@@ -665,24 +689,32 @@ export function QuantKpiChart({ kpis }) {
                 >
                   {k.metric}
                 </span>
-                {k.context && (
-                  <span
-                    style={{
-                      fontSize: "0.68rem",
-                      color: "var(--color-sidebar-text)",
-                      marginLeft: 6,
-                    }}
-                  >
-                    {k.context}
-                  </span>
-                )}
-              </div>
-              <span
-                style={{ fontSize: "0.95rem", fontWeight: 800, color, letterSpacing: "-0.01em" }}
-              >
-                {k.target}
-              </span>
-            </div>
+                 {k.context && (
+                   <div
+                     style={{
+                       fontSize: "0.7rem",
+                       color: "var(--color-sidebar-text)",
+                       marginTop: 4,
+                       lineHeight: 1.45,
+                     }}
+                   >
+                     {k.context}
+                   </div>
+                 )}
+               </div>
+               <span
+                 style={{
+                   fontSize: "0.95rem",
+                   fontWeight: 800,
+                   color,
+                   letterSpacing: "-0.01em",
+                   marginLeft: 16,
+                   flexShrink: 0,
+                 }}
+               >
+                 {formatKpiTarget(k.target)}
+               </span>
+             </div>
             <div
               style={{
                 height: 6,
@@ -757,13 +789,13 @@ export function BudgetDonut({ strategy }) {
   if (!strategy?.budget_allocation) return null;
   const entries = Object.entries(strategy.budget_allocation);
   if (!entries.length) return null;
-  const slices = entries.map(([label, val], i) => ({
-    label,
-    pct: parseFloat(String(val)) || 0,
-    color: DONUT_PALETTE[i % DONUT_PALETTE.length],
-  }));
+    const slices = entries.map(([label, val], i) => ({
+      label,
+      pct: parsePercentLike(val),
+      color: DONUT_PALETTE[i % DONUT_PALETTE.length],
+    }));
   return (
-    <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 16 }}>
+      <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 20 }}>
       <div style={{ position: "relative" }}>
         <DonutChart slices={slices} size={150} />
         <div
@@ -779,9 +811,9 @@ export function BudgetDonut({ strategy }) {
           <DollarSign size={15} style={{ color: "var(--color-accent)" }} />
         </div>
       </div>
-      <div
-        style={{ width: "100%", display: "grid", gridTemplateColumns: "1fr 1fr", gap: "6px 16px" }}
-      >
+        <div
+          style={{ width: "100%", display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px 18px" }}
+        >
         {slices.map((s) => (
           <div key={s.label} style={{ display: "flex", alignItems: "flex-start", gap: 7 }}>
             <div
@@ -797,16 +829,16 @@ export function BudgetDonut({ strategy }) {
             <div style={{ flex: 1, minWidth: 0 }}>
               <p
                 style={{
-                  fontSize: "0.74rem",
+                  fontSize: "0.76rem",
                   color: "var(--color-input-text)",
                   fontWeight: 500,
                   margin: 0,
-                  lineHeight: 1.4,
+                  lineHeight: 1.5,
                 }}
               >
                 {s.label.replace(/_/g, " ")}
               </p>
-              <p style={{ fontSize: "0.78rem", fontWeight: 800, color: s.color, margin: 0 }}>
+              <p style={{ fontSize: "0.82rem", fontWeight: 800, color: s.color, margin: "2px 0 0" }}>
                 {s.pct}%
               </p>
             </div>
@@ -847,8 +879,8 @@ export function FunnelStages({ stages }) {
       <div
         style={{
           display: "grid",
-          gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))",
-          gap: 12,
+          gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))",
+          gap: 16,
         }}
       >
         {stages.map((s, i) => {
@@ -860,10 +892,10 @@ export function FunnelStages({ stages }) {
                 borderRadius: 14,
                 border: `1px solid ${c.border}`,
                 backgroundColor: c.bg,
-                padding: "18px 18px 14px",
+                padding: "20px 20px 16px",
                 display: "flex",
                 flexDirection: "column",
-                gap: 10,
+                gap: 14,
                 position: "relative",
                 overflow: "hidden",
               }}
@@ -945,9 +977,9 @@ export function FunnelStages({ stages }) {
                   </p>
                   <p
                     style={{
-                      fontSize: "0.76rem",
+                      fontSize: "0.8rem",
                       color: "var(--color-input-text)",
-                      lineHeight: 1.5,
+                      lineHeight: 1.65,
                       margin: 0,
                     }}
                   >
@@ -973,9 +1005,9 @@ export function FunnelStages({ stages }) {
                   </p>
                   <p
                     style={{
-                      fontSize: "0.76rem",
+                      fontSize: "0.8rem",
                       color: "var(--color-input-text)",
-                      lineHeight: 1.5,
+                      lineHeight: 1.65,
                       margin: 0,
                     }}
                   >
@@ -1359,7 +1391,7 @@ export default function StrategyViewer({ strategy, ad, onRetry }) {
       style={{
         display: "flex",
         flexDirection: "column",
-        gap: 28,
+      gap: 32,
         animation: "pageFadeIn 0.3s ease both",
       }}
     >
@@ -1370,7 +1402,7 @@ export default function StrategyViewer({ strategy, ad, onRetry }) {
           overflow: "hidden",
           background:
             "linear-gradient(135deg, #0d1b2e 0%, #0a2540 55%, rgba(var(--color-accent-r),var(--color-accent-g),var(--color-accent-b),0.18) 100%)",
-          padding: "28px 28px 24px",
+          padding: "32px 32px 28px",
           position: "relative",
         }}
       >
@@ -1428,7 +1460,7 @@ export default function StrategyViewer({ strategy, ad, onRetry }) {
 
           {/* Ad type + platform chips */}
           {(adTypes.length > 0 || platforms.length > 0) && (
-            <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 18 }}>
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 22 }}>
               {adTypes.map((t, i) => (
                 <span
                   key={i}
@@ -1472,7 +1504,7 @@ export default function StrategyViewer({ strategy, ad, onRetry }) {
             style={{
               display: "flex",
               flexWrap: "wrap",
-              gap: 20,
+              gap: 28,
               paddingTop: 16,
               borderTop: "1px solid rgba(255,255,255,0.1)",
             }}
@@ -2017,18 +2049,6 @@ export default function StrategyViewer({ strategy, ad, onRetry }) {
               )}
             </div>
           </div>
-        </div>
-      )}
-
-      {/* ── CHANNEL STRATEGY ── */}
-      {channels?.length > 0 && (
-        <div>
-          <SBar label="Channel Strategy" />
-          <SCard>
-            {channels.map((ch, i) => (
-              <ChannelRow key={i} ch={ch} index={i} />
-            ))}
-          </SCard>
         </div>
       )}
 

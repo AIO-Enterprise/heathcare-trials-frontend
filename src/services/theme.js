@@ -176,8 +176,14 @@ const THEME_OVERRIDE_KEY = "theme_override";
 // correct theme is restored instantly without waiting for an API round-trip.
 const THEME_CACHE_KEY = "brand_kit_cache";
 
+function logTheme(event, payload = {}) {
+  console.info(`[brandkit] ${event}`, payload);
+}
+
 export function isDefaultThemeOverrideActive() {
-  return localStorage.getItem(THEME_OVERRIDE_KEY) === "default";
+  const active = localStorage.getItem(THEME_OVERRIDE_KEY) === "default";
+  logTheme("isDefaultThemeOverrideActive", { active });
+  return active;
 }
 
 /**
@@ -187,8 +193,11 @@ export function isDefaultThemeOverrideActive() {
 export function getCachedBrandTheme() {
   try {
     const raw = localStorage.getItem(THEME_CACHE_KEY);
-    return raw ? JSON.parse(raw) : null;
+    const parsed = raw ? JSON.parse(raw) : null;
+    logTheme("getCachedBrandTheme", { found: !!parsed, raw });
+    return parsed;
   } catch {
+    logTheme("getCachedBrandTheme:parse_failed");
     return null;
   }
 }
@@ -206,7 +215,16 @@ export function getCachedBrandTheme() {
  *   Expected fields: primary_color, accent_color, primary_font (all optional)
  */
 export function applyBrandTheme(brandKit) {
-  if (!brandKit) return;
+  if (!brandKit) {
+    logTheme("applyBrandTheme:skip_empty");
+    return;
+  }
+
+  logTheme("applyBrandTheme:start", {
+    primary_color: brandKit.primary_color,
+    accent_color: brandKit.accent_color,
+    primary_font: brandKit.primary_font,
+  });
 
   // Saving a brand kit always clears the "use default" override.
   localStorage.removeItem(THEME_OVERRIDE_KEY);
@@ -242,6 +260,11 @@ export function applyBrandTheme(brandKit) {
       `'${brandKit.primary_font}', system-ui, -apple-system, sans-serif`,
     );
   }
+
+  logTheme("applyBrandTheme:done", {
+    override: localStorage.getItem(THEME_OVERRIDE_KEY),
+    cached: !!localStorage.getItem(THEME_CACHE_KEY),
+  });
 }
 
 /**
@@ -252,9 +275,10 @@ export function applyBrandTheme(brandKit) {
  * Pass clearFlag=true on logout to also remove the override flag so the
  * next company's login starts clean.
  */
-export function resetBrandTheme({ clearFlag = false } = {}) {
-  // Always clear the cache so a stale kit isn't restored on the next load.
-  localStorage.removeItem(THEME_CACHE_KEY);
+export function resetBrandTheme({ clearFlag = false, preserveCache = false } = {}) {
+  if (!preserveCache) {
+    localStorage.removeItem(THEME_CACHE_KEY);
+  }
 
   const root = document.documentElement;
   const props = [
@@ -279,4 +303,11 @@ export function resetBrandTheme({ clearFlag = false } = {}) {
   } else {
     localStorage.setItem(THEME_OVERRIDE_KEY, "default");
   }
+
+  logTheme("resetBrandTheme", {
+    clearFlag,
+    preserveCache,
+    override: localStorage.getItem(THEME_OVERRIDE_KEY),
+    cached: !!localStorage.getItem(THEME_CACHE_KEY),
+  });
 }

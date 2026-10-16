@@ -26,10 +26,13 @@ export function AuthProvider({ children }) {
 
   useEffect(() => {
     const stored = localStorage.getItem("user");
+    console.info("[brandkit] AuthProvider:init", { hasStoredUser: !!stored });
 
     if (stored) {
       try {
-        setUser(JSON.parse(stored));
+        const parsed = JSON.parse(stored);
+        console.info("[brandkit] AuthProvider:restore_user", parsed);
+        setUser(parsed);
 
         // Proactively refresh the JWT if it's close to expiry (< 10 min).
         // Runs silently in the background — doesn't block the UI.
@@ -43,8 +46,11 @@ export function AuthProvider({ children }) {
           // 2. Refresh from API in the background; update if anything changed.
           brandKitAPI
             .get()
-            .then((brandKit) => applyBrandTheme(brandKit))
-            .catch(() => {});
+            .then((brandKit) => {
+              console.info("[brandkit] AuthProvider:init_fetch_success", brandKit);
+              applyBrandTheme(brandKit);
+            })
+            .catch((err) => console.info("[brandkit] AuthProvider:init_fetch_failed", err?.message || err));
         }
       } catch {
         localStorage.removeItem("user");
@@ -57,6 +63,21 @@ export function AuthProvider({ children }) {
 
     setLoading(false);
   }, []);
+
+  useEffect(() => {
+    console.info("[brandkit] AuthProvider:user_effect", {
+      hasUser: !!user,
+      user,
+    });
+    if (!user || isDefaultThemeOverrideActive()) return;
+    brandKitAPI
+      .get()
+      .then((brandKit) => {
+        console.info("[brandkit] AuthProvider:user_fetch_success", brandKit);
+        applyBrandTheme(brandKit);
+      })
+      .catch((err) => console.info("[brandkit] AuthProvider:user_fetch_failed", err?.message || err));
+  }, [user]);
 
   // Listen for auth:expired events dispatched by the token refresh helper
   // when a refresh call fails (e.g. token revoked server-side).
@@ -82,17 +103,9 @@ export function AuthProvider({ children }) {
       email: data.email || "",
       onboarded: data.onboarded ?? false,
     };
+    console.info("[brandkit] AuthProvider:login_success", userData);
     localStorage.setItem("user", JSON.stringify(userData));
     setUser(userData);
-
-    // Fetch and apply brand theme after login — skip if user prefers default.
-    // applyBrandTheme also caches the kit in localStorage so it survives refresh.
-    if (!isDefaultThemeOverrideActive()) {
-      brandKitAPI
-        .get()
-        .then((brandKit) => applyBrandTheme(brandKit))
-        .catch(() => {});
-    }
 
     return userData;
   }, []);

@@ -96,9 +96,11 @@ export default function DeployTab({ ads, hostingId, hostError, onHost }) {
         const isHosting = hostingId === ad.id;
         const hostedUrl = ad.hosted_url || null;
 
+        const hasWebsiteAsset = Boolean(ad.hosted_url || ad.output_url || ad.website_download_url);
+
         return (
           <SectionCard key={ad.id} title={ad.title} subtitle={`${typeLabel(ad)} · ${ad.status}`}>
-            {ad.output_url ? (
+            {hasWebsiteAsset ? (
               <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
                 {/* Landing page row */}
                 <div

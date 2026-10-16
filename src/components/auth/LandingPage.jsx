@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../../contexts/AuthContext";
+import { resetBrandTheme } from "../../services/theme";
 import {
   LogIn,
   ArrowRight,
@@ -381,6 +382,10 @@ const WORKFLOW = [
 export default function LandingPage() {
   const [showLogin, setShowLogin] = useState(false);
   const navigate = useNavigate();
+
+  useEffect(() => {
+    resetBrandTheme({ clearFlag: true });
+  }, []);
   const { isAuthenticated, role } = useAuth();
 
   // If already logged in, redirect to dashboard

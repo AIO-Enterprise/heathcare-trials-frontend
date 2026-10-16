@@ -199,10 +199,10 @@ export default function OnboardingPage() {
       //    meaningful to save, so we skip the API call entirely and leave the
       //    platform running on its default theme.
       //    Skipped on retry — brand kit was already created.
-      if (!companyId) {
-        const hasBrandData =
-          brand.primaryColor || brand.accentColor || brandPdfFile || selectedPreset;
-        if (hasBrandData) {
+       if (!brandKitSaved) {
+         const hasBrandData =
+           brand.primaryColor || brand.accentColor || brandPdfFile || selectedPreset;
+         if (hasBrandData) {
           // Upload the PDF first if one was provided, then persist its path
           let pdfPath = null;
           if (brandPdfFile) {
@@ -220,11 +220,11 @@ export default function OnboardingPage() {
             donts: brand.donts || null,
             preset_name: selectedPreset || null,
             pdf_path: pdfPath,
-          });
-          applyBrandTheme(createdBrandKit);
-        }
-        setBrandKitSaved(true);
-      }
+           });
+           applyBrandTheme(createdBrandKit);
+         }
+         setBrandKitSaved(true);
+       }
 
       // 9. Trigger AI skill initialization — marks company onboarded + runs in background.
       //    Always run on every attempt (idempotent — backend checks onboarded flag).
@@ -237,7 +237,6 @@ export default function OnboardingPage() {
         companyId: loginRes.company_id,
         companyName: loginRes.company_name,
         companyIndustry: form.industry || null,
-        token: loginRes.access_token,
         onboarded: true,
       });
 

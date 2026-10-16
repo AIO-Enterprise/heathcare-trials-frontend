@@ -327,7 +327,6 @@ const PAGE_TABS = [
   { key: "creatives", label: "Creatives", icon: Image },
   { key: "questionnaire", label: "Questionnaire", icon: ClipboardList },
   { key: "participants", label: "Participants", icon: Users },
-  { key: "review", label: "Review", icon: ClipboardCheck },
   { key: "history", label: "History", icon: History },
 ];
 
