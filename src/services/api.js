@@ -379,7 +379,7 @@ export const onboardingAPI = {
           });
         }
         const errBody = await s3Res.text().catch(() => "");
-        console.warn("S3 upload failed, falling back to direct:", s3Res.status, errBody);
+        console.warn("Direct storage upload failed, falling back to direct backend upload:", s3Res.status, errBody);
       }
     }
 
@@ -564,7 +564,7 @@ export const documentsAPI = {
         });
       }
       const errBody = await s3Res.text().catch(() => "");
-      console.warn("S3 upload failed, falling back to direct:", s3Res.status, errBody);
+      console.warn("Direct storage upload failed, falling back to direct backend upload:", s3Res.status, errBody);
     }
 
     // 2b. Direct multipart fallback (localhost / presign misconfig)
@@ -682,7 +682,7 @@ export const adsAPI = {
 
       // S3 PUT failed — log and fall through to direct multipart
       const errBody = await s3Res.text().catch(() => "");
-      console.warn("S3 upload failed, falling back to direct upload:", s3Res.status, errBody);
+      console.warn("Direct storage upload failed, falling back to direct backend upload:", s3Res.status, errBody);
     }
 
     // 2b. Direct multipart upload (localhost / S3 not configured / S3 permission error)
@@ -1007,6 +1007,12 @@ export const participantsAPI = {
 };
 
 export const surveyAPI = {
+  getPublicCampaign: (adId) =>
+    fetch(`${API_BASE}/advertisements/${adId}/public`, { cache: "no-store" }).then(async (res) => {
+      if (!res.ok) throw new Error("Campaign not found");
+      return res.json();
+    }),
+
   // Submit participant details + answers (public — no auth token required).
   submit: (adId, data) =>
     fetch(`${API_BASE}/advertisements/${adId}/survey-responses`, {
@@ -1054,12 +1060,28 @@ export const analysisAPI = {
 export const appointmentsAPI = {
   list: (adId) => request(`/advertisements/${adId}/appointments`),
 
-  getSlots: (adId, date) => request(`/advertisements/${adId}/appointments/slots?date=${date}`),
+  getSlots: (adId, date) =>
+    fetch(`${API_BASE}/advertisements/${adId}/appointments/slots?date=${encodeURIComponent(date)}`, {
+      cache: "no-store",
+    }).then(async (res) => {
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ detail: res.statusText }));
+        throw new Error(err.detail || `HTTP ${res.status}: ${res.statusText}`);
+      }
+      return res.json();
+    }),
 
   book: (adId, data) =>
-    request(`/advertisements/${adId}/appointments`, {
+    fetch(`${API_BASE}/advertisements/${adId}/appointments`, {
       method: "POST",
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify(data),
+    }).then(async (res) => {
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ detail: res.statusText }));
+        throw new Error(err.detail || "Booking failed");
+      }
+      return res.json();
     }),
 
   cancel: (adId, appointmentId) =>

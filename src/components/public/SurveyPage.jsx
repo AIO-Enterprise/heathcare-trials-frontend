@@ -11,14 +11,7 @@
 
 import React, { useState, useEffect } from "react";
 import { useParams } from "react-router-dom";
-import { surveyAPI, API_BASE } from "../../services/api";
-
-// ── Fetch campaign data (public, no auth — cookies intentionally omitted) ─────
-async function fetchCampaign(adId) {
-  const res = await fetch(`${API_BASE}/advertisements/${adId}/public`);
-  if (!res.ok) throw new Error("Campaign not found");
-  return res.json();
-}
+import { appointmentsAPI, surveyAPI } from "../../services/api";
 
 // ── Inline styles ─────────────────────────────────────────────────────────────
 const s = {
@@ -450,18 +443,8 @@ function BookingStep({
     setSelectedSlot(null);
     setError("");
 
-    fetch(`${API_BASE}/advertisements/${adId}/appointments/slots?date=${selectedDate}`)
-      .then((r) => {
-        if (!r.ok) {
-          return r
-            .json()
-            .catch(() => ({}))
-            .then((err) => {
-              throw new Error(err.detail || `HTTP ${r.status}: ${r.statusText}`);
-            });
-        }
-        return r.json();
-      })
+    appointmentsAPI
+      .getSlots(adId, selectedDate)
       .then((data) => setSlots(data.slots || []))
       .catch((err) => {
         console.error("Slot fetch error:", err);
@@ -481,21 +464,12 @@ function BookingStep({
 
     try {
       const slotDatetime = new Date(`${selectedDate}T${selectedSlot}:00`).toISOString();
-      const res = await fetch(`${API_BASE}/advertisements/${adId}/appointments`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          patient_name: patientName,
-          patient_phone: patientPhone,
-          slot_datetime: slotDatetime,
-          survey_response_id: surveyResponseId,
-        }),
+      await appointmentsAPI.book(adId, {
+        patient_name: patientName,
+        patient_phone: patientPhone,
+        slot_datetime: slotDatetime,
+        survey_response_id: surveyResponseId,
       });
-
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({}));
-        throw new Error(err.detail || "Booking failed");
-      }
 
       onBooked();
     } catch (err) {
@@ -692,7 +666,7 @@ export default function SurveyPage() {
   const [appointmentBooked, setAppointmentBooked] = useState(false);
 
   useEffect(() => {
-    fetchCampaign(campaignId)
+    surveyAPI.getPublicCampaign(campaignId)
       .then(setCampaign)
       .catch(() => setLoadError("This survey link is not valid or has expired."));
   }, [campaignId]);
