@@ -86,10 +86,11 @@ function LoginModal({ onClose }) {
         style={{
           width: "100%",
           maxWidth: "26rem",
+          maxHeight: "min(92vh, 48rem)",
           backgroundColor: "#0d1117",
           border: "1px solid #1f2937",
           borderRadius: "16px",
-          overflow: "hidden",
+          overflow: "auto",
           animation: "slideUp 0.2s ease",
           boxShadow: "0 25px 60px rgba(0,0,0,0.6)",
         }}
@@ -125,7 +126,7 @@ function LoginModal({ onClose }) {
         </div>
 
         {/* Body */}
-        <div style={{ padding: "1.5rem" }}>
+        <div style={{ padding: "1.5rem", overflowY: "auto" }}>
           <h2
             style={{ color: "#f9fafb", fontSize: "1.125rem", fontWeight: 700, marginBottom: "4px" }}
           >

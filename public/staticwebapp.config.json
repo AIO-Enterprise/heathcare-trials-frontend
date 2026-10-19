@@ -3,6 +3,7 @@
   "navigationFallback": {
     "rewrite": "/index.html",
     "exclude": [
+      "/api/*",
       "/assets/*",
       "*.{js,css,json,map,png,jpg,jpeg,gif,svg,ico,webp,woff,woff2,ttf,eot}"
     ]
